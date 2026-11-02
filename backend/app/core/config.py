@@ -3,6 +3,7 @@
 Loads all environment variables and provides typed access.
 """
 
+from pathlib import Path
 import secrets
 from typing import Self
 import structlog
@@ -10,6 +11,11 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 logger = structlog.get_logger()
+
+# Resolve configuration file locations relative to this file
+_CORE_DIR = Path(__file__).resolve().parent
+_BACKEND_DIR = _CORE_DIR.parent.parent  # backend/
+_ROOT_DIR = _BACKEND_DIR.parent          # Suits/
 
 
 class Settings(BaseSettings):
@@ -116,7 +122,13 @@ class Settings(BaseSettings):
         return self
 
     model_config = {
-        "env_file": [".env", "backend/.env"],
+        "env_file": [
+            str(_ROOT_DIR / ".env"),
+            str(_BACKEND_DIR / ".env"),
+            ".env",
+            "../.env",
+            "backend/.env",
+        ],
         "env_file_encoding": "utf-8",
         "extra": "ignore",
     }

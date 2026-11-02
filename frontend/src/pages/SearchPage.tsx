@@ -182,6 +182,7 @@ export default function SearchPage() {
             <SearchResultCard
               key={item.cnr}
               item={item}
+              searchQuery={filters.query}
               isBookmarked={bookmarkedCnrs.has(item.cnr)}
               isToggling={togglingCnrs.has(item.cnr)}
               onBookmarkToggle={handleBookmarkToggle}

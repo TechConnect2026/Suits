@@ -33,6 +33,9 @@ import type { OrderItem, OrderAI } from "@/types/case";
 import type { PDFHighlight } from "@/types/file";
 import type { ChatMessage } from "@/types/chat";
 import type { UserDocument } from "@/types/document";
+import { VerdictAnatomyView } from "./VerdictAnatomyView";
+import { precedentService } from "@/services/precedents";
+import type { VerdictAnatomyResponse } from "@/types/precedents";
 
 interface DocumentReaderModalProps {
   isOpen: boolean;
@@ -42,7 +45,7 @@ interface DocumentReaderModalProps {
   caseTitle?: string;
   courtName?: string;
   orderDate?: string;
-  initialMode?: "pdf" | "text" | "ai";
+  initialMode?: "pdf" | "text" | "ai" | "anatomy";
   orders?: OrderItem[];
   allowModeToggle?: boolean;
   // User Document support
@@ -61,7 +64,7 @@ interface DocumentReaderModalProps {
   onExpandChat?: () => void;
 }
 
-type ViewMode = "pdf" | "text" | "ai";
+type ViewMode = "pdf" | "text" | "ai" | "anatomy";
 type FontFamily = "sans" | "serif";
 type FontSize = 14 | 16 | 18 | 20;
 
@@ -113,6 +116,8 @@ export function DocumentReaderModal({
 
   const [structuredAI, setStructuredAI] = useState<OrderAI | null>(initialAiData || userDoc?.ai_analysis || null);
   const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [anatomyData, setAnatomyData] = useState<VerdictAnatomyResponse | null>(null);
+  const [anatomyLoading, setAnatomyLoading] = useState<boolean>(false);
 
   // Typography state (Clean Text Mode)
   const [fontFamily, setFontFamily] = useState<FontFamily>("serif");
@@ -325,6 +330,30 @@ export function DocumentReaderModal({
       setAiLoading(false);
     }
   };
+
+  const fetchAnatomy = async () => {
+    if (anatomyData || anatomyLoading) return;
+    setAnatomyLoading(true);
+    try {
+      const res = await precedentService.getVerdictAnatomy({
+        cnr: effectiveCnr,
+        raw_text: textContent || undefined,
+        case_title: effectiveCaseTitle,
+        court_name: effectiveCourtName,
+      });
+      setAnatomyData(res);
+    } catch {
+      toast.error("Failed to extract verdict anatomy.");
+    } finally {
+      setAnatomyLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && mode === "anatomy" && !anatomyData) {
+      fetchAnatomy();
+    }
+  }, [isOpen, mode, anatomyData, effectiveCnr, textContent]);
 
   const handleSelectOrder = (selectedFname: string) => {
     const found = orders.find((o) => o.filename === selectedFname);
@@ -630,6 +659,19 @@ export function DocumentReaderModal({
                 <Sparkles size={13} />
                 <span>AI Analysis</span>
               </button>
+
+              <button
+                onClick={() => setMode("anatomy")}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all"
+                style={{
+                  background: mode === "anatomy" ? "var(--card)" : "transparent",
+                  color: mode === "anatomy" ? "var(--brass-bright)" : "var(--text-muted)",
+                  boxShadow: mode === "anatomy" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                }}
+              >
+                <Scale size={13} />
+                <span>Verdict Anatomy</span>
+              </button>
             </div>
           )}
 
@@ -914,6 +956,29 @@ export function DocumentReaderModal({
                     statutesCited={structuredAI?.statutes_cited}
                     onReadDocument={() => setMode("pdf")}
                   />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* MODE 4: STRUCTURED 4-PART VERDICT ANATOMY (PILLAR 3) */}
+          {mode === "anatomy" && (
+            <div className="w-full h-full flex overflow-y-auto p-4 sm:p-8 justify-center">
+              <div className="w-full max-w-5xl">
+                {anatomyLoading ? (
+                  <div className="flex flex-col items-center justify-center py-24">
+                    <SuitsLoader
+                      size={48}
+                      label="Isolating binding ratio decidendi…"
+                      sublabel="Separating ratio decidendi from obiter dicta under Sudhansu Sekhar doctrine"
+                    />
+                  </div>
+                ) : anatomyData ? (
+                  <VerdictAnatomyView data={anatomyData} />
+                ) : (
+                  <div className="text-center py-20 text-xs text-muted-foreground">
+                    No judgment text available to deconstruct into verdict anatomy.
+                  </div>
                 )}
               </div>
             </div>

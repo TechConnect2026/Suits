@@ -9,10 +9,17 @@ from app.schemas.common import APIResponse
 from app.schemas.era_transition import (
     ConcordanceLookupResponse,
     EraTransitionCaseAnalysis,
+    StatutoryVerbatimDiffResponse,
+    TemporalInspectionRequest,
+    TemporalInspectionResponse,
     TransitionQuestionRequest,
     TransitionQuestionResponse,
+    TransitionalJurisprudenceResponse,
 )
 from app.services.era_transition_service import EraTransitionService
+from app.services.temporal_safeguard_service import temporal_safeguard_service
+from app.services.statutory_diff_service import statutory_diff_service
+from app.services.transitional_jurisprudence_service import transitional_jurisprudence_service
 from app.core.exceptions import InvalidCNRError
 
 logger = structlog.get_logger()
@@ -38,7 +45,6 @@ def lookup_era_concordance(
     db: DbSession = None,
 ):
     """Search criminal statutes concordance by section, statute, or InLegalBERT semantic doctrine."""
-    # If the user explicitly typed a statute in their query, prioritize that over any tab filter
     q_lower = query.lower()
     if re.search(r"\b(crpc|code of criminal procedure|criminal procedure|bnss|bharatiya nagarik|nagarik suraksha)\b", q_lower):
         category = "PROCEDURAL"
@@ -72,6 +78,38 @@ async def ask_era_transition_question(
     )
     return APIResponse(data=result)
 
+
+# ── Pillar 4: Temporal Safeguard & Verbatim Diff Endpoints ──
+
+@router.post("/era-transition/inspect-temporal", response_model=APIResponse[TemporalInspectionResponse])
+def inspect_temporal_incident(
+    payload: TemporalInspectionRequest,
+    user: OptionalUser = None,
+) -> APIResponse[TemporalInspectionResponse]:
+    """Inspects incident and FIR dates against the July 1, 2024 cutoff for Article 20(1) compliance."""
+    result = temporal_safeguard_service.inspect_temporal_incident(payload)
+    return APIResponse(data=result, message="Temporal incident analysis complete.")
+
+
+@router.get("/era-transition/verbatim-diff/{pair_id}", response_model=APIResponse[StatutoryVerbatimDiffResponse])
+def get_statutory_verbatim_diff(
+    pair_id: str,
+    user: OptionalUser = None,
+) -> APIResponse[StatutoryVerbatimDiffResponse]:
+    """Generates word-for-word textual diff and procedural delta between old and new statutes."""
+    result = statutory_diff_service.get_verbatim_diff(pair_id)
+    return APIResponse(data=result, message="Verbatim statutory diff computed successfully.")
+
+
+@router.get("/era-transition/transitional-jurisprudence", response_model=APIResponse[TransitionalJurisprudenceResponse])
+def get_transitional_jurisprudence(
+    topic: str | None = Query(None, description="Topic filter (e.g. 'Undertrial Bail', 'Police Custody')"),
+    query: str | None = Query(None, description="Textual search keyword"),
+    user: OptionalUser = None,
+) -> APIResponse[TransitionalJurisprudenceResponse]:
+    """Retrieves curated landmark authorities resolving criminal reform transition ambiguities."""
+    result = transitional_jurisprudence_service.list_jurisprudence(topic=topic, query=query)
+    return APIResponse(data=result, message="Transitional jurisprudence retrieved successfully.")
 
 
 @router.get("/cases/{cnr}/era-transition", response_model=APIResponse[EraTransitionCaseAnalysis])

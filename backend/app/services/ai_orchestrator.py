@@ -177,7 +177,7 @@ class AIOrchestrator:
 
         # Cloud AI execution path
         try:
-            result = await openrouter_client.generate(prompt=prompt, system_prompt=system_prompt)
+            result = await openrouter_client.generate(user_prompt=prompt, system_prompt=system_prompt)
             if result and result.strip():
                 return result
         except Exception as or_err:

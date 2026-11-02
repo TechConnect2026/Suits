@@ -18,6 +18,8 @@ import {
   ShieldCheck,
   ChevronRight,
   Info,
+  Split,
+  Calendar,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -26,6 +28,10 @@ import type {
   StatuteConcordancePair,
   TransitionQuestionResponse,
 } from "@/types/era_transition";
+import { VerbatimStatutoryDiffModal } from "./VerbatimStatutoryDiffModal";
+import { EmbeddedVerbatimDiff } from "./EmbeddedVerbatimDiff";
+import { TemporalSafeguardWidget } from "./TemporalSafeguardWidget";
+import { TransitionalJurisprudenceFeed } from "./TransitionalJurisprudenceFeed";
 
 const CURATED_QUESTIONS = [
   "Can police take custody after the first 15 days under Section 187 BNSS?",
@@ -54,7 +60,9 @@ const buildPleadingText = (pair: StatuteConcordancePair): string => {
 };
 
 export const EraTransitionExplorer: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"matrix" | "qa">("matrix");
+  const [activeTab, setActiveTab] = useState<"matrix" | "diff" | "temporal" | "jurisprudence" | "qa">("matrix");
+  const [selectedDiffPair, setSelectedDiffPair] = useState<string>("crpc_438_bnss_482");
+  const [showDiffModal, setShowDiffModal] = useState<boolean>(false);
   const [query, setQuery] = useState<string>("");
   const [results, setResults] = useState<StatuteConcordancePair[]>([]);
   const [hasSearched, setHasSearched] = useState<boolean>(false);
@@ -114,6 +122,11 @@ export const EraTransitionExplorer: React.FC = () => {
     setCopiedId(pair.id);
     toast.success(`Copied Section 8 transposition argument for Section ${pair.new_section} ${pair.new_code}`);
     setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleOpenDiff = (pairId: string) => {
+    setSelectedDiffPair(pairId);
+    setShowDiffModal(true);
   };
 
   const handleAskQuestion = async (customQ?: string) => {
@@ -211,12 +224,13 @@ export const EraTransitionExplorer: React.FC = () => {
 
         {/* View Switcher Tabs (Segmented Glass Pill) */}
         <div
-          className="p-1 rounded-xl border flex items-center gap-1 self-start md:self-auto"
+          className="p-1 rounded-xl border flex items-center gap-1 self-start md:self-auto overflow-x-auto scrollbar-none"
           style={{ background: "var(--surface)", borderColor: "var(--hairline)" }}
         >
+          {/* Tab 1: Concordance */}
           <button
             onClick={() => setActiveTab("matrix")}
-            className="relative px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-2 select-none"
+            className="relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 select-none whitespace-nowrap"
           >
             {activeTab === "matrix" && (
               <motion.div
@@ -236,14 +250,99 @@ export const EraTransitionExplorer: React.FC = () => {
                 fontWeight: activeTab === "matrix" ? 600 : 400,
               }}
             >
-              <Scale size={14} />
-              <span>Concordance Explorer</span>
+              <Scale size={13} />
+              <span>Concordance</span>
             </span>
           </button>
 
+          {/* Tab 2: Verbatim Diff */}
+          <button
+            onClick={() => setActiveTab("diff")}
+            className="relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 select-none whitespace-nowrap"
+          >
+            {activeTab === "diff" && (
+              <motion.div
+                layoutId="transition-main-tab-pill"
+                className="absolute inset-0 rounded-lg"
+                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                style={{
+                  background: "var(--brass)",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }}
+              />
+            )}
+            <span
+              className="relative z-10 flex items-center gap-1.5"
+              style={{
+                color: activeTab === "diff" ? "var(--on-primary)" : "var(--ink-dim)",
+                fontWeight: activeTab === "diff" ? 600 : 400,
+              }}
+            >
+              <Split size={13} />
+              <span>Verbatim Diff</span>
+            </span>
+          </button>
+
+          {/* Tab 3: Article 20(1) Temporal Calculator */}
+          <button
+            onClick={() => setActiveTab("temporal")}
+            className="relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 select-none whitespace-nowrap"
+          >
+            {activeTab === "temporal" && (
+              <motion.div
+                layoutId="transition-main-tab-pill"
+                className="absolute inset-0 rounded-lg"
+                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                style={{
+                  background: "var(--brass)",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }}
+              />
+            )}
+            <span
+              className="relative z-10 flex items-center gap-1.5"
+              style={{
+                color: activeTab === "temporal" ? "var(--on-primary)" : "var(--ink-dim)",
+                fontWeight: activeTab === "temporal" ? 600 : 400,
+              }}
+            >
+              <Calendar size={13} />
+              <span>Art. 20(1) Calculator</span>
+            </span>
+          </button>
+
+          {/* Tab 4: Transitional Jurisprudence */}
+          <button
+            onClick={() => setActiveTab("jurisprudence")}
+            className="relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 select-none whitespace-nowrap"
+          >
+            {activeTab === "jurisprudence" && (
+              <motion.div
+                layoutId="transition-main-tab-pill"
+                className="absolute inset-0 rounded-lg"
+                transition={{ type: "spring", stiffness: 450, damping: 32 }}
+                style={{
+                  background: "var(--brass)",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                }}
+              />
+            )}
+            <span
+              className="relative z-10 flex items-center gap-1.5"
+              style={{
+                color: activeTab === "jurisprudence" ? "var(--on-primary)" : "var(--ink-dim)",
+                fontWeight: activeTab === "jurisprudence" ? 600 : 400,
+              }}
+            >
+              <Gavel size={13} />
+              <span>Jurisprudence</span>
+            </span>
+          </button>
+
+          {/* Tab 5: Advisor */}
           <button
             onClick={() => setActiveTab("qa")}
-            className="relative px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-2 select-none"
+            className="relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 select-none whitespace-nowrap"
           >
             {activeTab === "qa" && (
               <motion.div
@@ -263,8 +362,8 @@ export const EraTransitionExplorer: React.FC = () => {
                 fontWeight: activeTab === "qa" ? 600 : 400,
               }}
             >
-              <MessageSquare size={14} />
-              <span>Transition Advisor</span>
+              <MessageSquare size={13} />
+              <span>Advisor</span>
             </span>
           </button>
         </div>
@@ -386,6 +485,7 @@ export const EraTransitionExplorer: React.FC = () => {
               onSelectTab={(tab) => setCardTab(results[0].id, tab)}
               isCopied={copiedId === results[0].id}
               onCopyArgument={() => handleCopyArgument(results[0])}
+              onOpenVerbatimDiff={handleOpenDiff}
               getDeltaBadgeStyle={getDeltaBadgeStyle}
             />
           ) : (
@@ -401,6 +501,7 @@ export const EraTransitionExplorer: React.FC = () => {
                   onSelectTab={(tab) => setCardTab(pair.id, tab)}
                   isCopied={copiedId === pair.id}
                   onCopyArgument={() => handleCopyArgument(pair)}
+                  onOpenVerbatimDiff={handleOpenDiff}
                   getDeltaBadgeStyle={getDeltaBadgeStyle}
                 />
               ))}
@@ -410,7 +511,106 @@ export const EraTransitionExplorer: React.FC = () => {
       )}
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* TAB 2: AI TRANSITION ADVISOR (Q&A)                            */}
+      {/* TAB 2: VERBATIM STATUTORY RED/GREEN DIFF                      */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === "diff" && (
+        <div className="space-y-6">
+          <div
+            className="p-5 rounded-2xl border space-y-4"
+            style={{ background: "var(--surface)", borderColor: "var(--hairline)" }}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--hairline)]">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center border"
+                  style={{
+                    background: "var(--brass-soft)",
+                    borderColor: "var(--brass)",
+                    color: "var(--brass-bright)",
+                  }}
+                >
+                  <Split size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold tracking-tight" style={{ color: "var(--ink)" }}>
+                    Verbatim Statutory Red/Green Diff Engine
+                  </h3>
+                  <p className="text-xs" style={{ color: "var(--ink-muted)" }}>
+                    Select a core procedural or penal transition pair to inspect word-for-word legislative changes
+                  </p>
+                </div>
+              </div>
+
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded border" style={{ background: "var(--surface-container)", borderColor: "var(--hairline)", color: "var(--brass-bright)" }}>
+                Active: {selectedDiffPair}
+              </span>
+            </div>
+
+            {/* Benchmark Section Chips */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {[
+                { id: "crpc_438_bnss_482", label: "Anticipatory Bail (438 CrPC ↔ 482 BNSS)" },
+                { id: "crpc_167_bnss_187", label: "Police Custody Beyond 15 Days (167 CrPC ↔ 187 BNSS)" },
+                { id: "crpc_41a_bnss_35_3", label: "Notice of Appearance (41A CrPC ↔ 35(3) BNSS)" },
+                { id: "crpc_173_bnss_193", label: "14-Day Preliminary Enquiry (173 CrPC ↔ 193 BNSS)" },
+                { id: "crpc_436a_bnss_479", label: "Undertrial 1/3rd Sentence Bail (436A CrPC ↔ 479 BNSS)" },
+                { id: "ipc_420_bns_318_4", label: "Cheating & Inducement (420 IPC ↔ 318(4) BNS)" },
+                { id: "iea_65b_bsa_63", label: "Electronic Record Certificate (65B IEA ↔ 63 BSA)" },
+              ].map((bench) => (
+                <button
+                  key={bench.id}
+                  onClick={() => setSelectedDiffPair(bench.id)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer border"
+                  style={{
+                    background: selectedDiffPair === bench.id ? "var(--brass-soft)" : "transparent",
+                    color: selectedDiffPair === bench.id ? "var(--brass-bright)" : "var(--ink-muted)",
+                    borderColor: selectedDiffPair === bench.id ? "var(--brass)" : "var(--hairline)",
+                  }}
+                >
+                  {bench.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                onClick={() => setShowDiffModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer transition-all"
+                style={{
+                  background: "var(--brass)",
+                  borderColor: "var(--brass)",
+                  color: "#000",
+                }}
+              >
+                <Split size={13} />
+                <span>Open Fullscreen Comparison Sheet</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Inline Embedded Diff View */}
+          <div className="pt-1">
+            <EmbeddedVerbatimDiff pairId={selectedDiffPair} />
+          </div>
+        </div>
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* TAB 3: ARTICLE 20(1) TEMPORAL INCIDENT CALCULATOR             */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === "temporal" && (
+        <TemporalSafeguardWidget />
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* TAB 4: TRANSITIONAL JURISPRUDENCE FEED                        */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeTab === "jurisprudence" && (
+        <TransitionalJurisprudenceFeed />
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* TAB 5: AI TRANSITION ADVISOR (Q&A)                            */}
       {/* ───────────────────────────────────────────────────────────── */}
       {activeTab === "qa" && (
         <div className="space-y-6">
@@ -644,6 +844,13 @@ export const EraTransitionExplorer: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* ── Standalone Verbatim Statutory Diff Modal (Pillar 4) ── */}
+      <VerbatimStatutoryDiffModal
+        isOpen={showDiffModal}
+        onClose={() => setShowDiffModal(false)}
+        pairId={selectedDiffPair}
+      />
     </div>
   );
 };
@@ -657,6 +864,7 @@ interface SpotlightProps {
   onSelectTab: (tab: "overview" | "precedents" | "pleading") => void;
   isCopied: boolean;
   onCopyArgument: () => void;
+  onOpenVerbatimDiff?: (pairId: string) => void;
   getDeltaBadgeStyle: (type?: string) => { bg: string; color: string; border: string; label: string };
 }
 
@@ -666,6 +874,7 @@ const SpotlightConcordanceCard: React.FC<SpotlightProps> = ({
   onSelectTab,
   isCopied,
   onCopyArgument,
+  onOpenVerbatimDiff,
   getDeltaBadgeStyle,
 }) => {
   const primaryDelta = pair.statutory_deltas[0];
@@ -723,20 +932,38 @@ const SpotlightConcordanceCard: React.FC<SpotlightProps> = ({
           )}
         </div>
 
-        {/* Global Quick Copy Button */}
-        <button
-          onClick={onCopyArgument}
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium text-xs transition-all cursor-pointer shadow-xs"
-          style={{
-            background: isCopied ? "var(--seal-disposed)" : "var(--brass-soft)",
-            color: isCopied ? "#ffffff" : "var(--brass-bright)",
-            border: "1px solid var(--hairline)",
-          }}
-          title="Copy Section 8 General Clauses Act court pleading"
-        >
-          {isCopied ? <Check size={14} /> : <Copy size={14} />}
-          <span>{isCopied ? "Copied Pleading" : "Copy Court Pleading"}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {onOpenVerbatimDiff && (
+            <button
+              onClick={() => onOpenVerbatimDiff(pair.id)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-medium text-xs transition-all cursor-pointer shadow-xs border"
+              style={{
+                background: "var(--surface)",
+                borderColor: "var(--brass)",
+                color: "var(--brass-bright)",
+              }}
+              title="Inspect word-for-word statutory red/green diff"
+            >
+              <Split size={13} />
+              <span>Verbatim Diff</span>
+            </button>
+          )}
+
+          {/* Global Quick Copy Button */}
+          <button
+            onClick={onCopyArgument}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-medium text-xs transition-all cursor-pointer shadow-xs"
+            style={{
+              background: isCopied ? "var(--seal-disposed)" : "var(--brass-soft)",
+              color: isCopied ? "#ffffff" : "var(--brass-bright)",
+              border: "1px solid var(--hairline)",
+            }}
+            title="Copy Section 8 General Clauses Act court pleading"
+          >
+            {isCopied ? <Check size={14} /> : <Copy size={14} />}
+            <span>{isCopied ? "Copied Pleading" : "Copy Court Pleading"}</span>
+          </button>
+        </div>
       </div>
 
       {/* ── Hero Statutory Transformation Bridge ── */}
@@ -1058,6 +1285,7 @@ interface GridProps {
   onSelectTab: (tab: "overview" | "precedents" | "pleading") => void;
   isCopied: boolean;
   onCopyArgument: () => void;
+  onOpenVerbatimDiff?: (pairId: string) => void;
   getDeltaBadgeStyle: (type?: string) => { bg: string; color: string; border: string; label: string };
 }
 
@@ -1067,6 +1295,7 @@ const GridConcordanceCard: React.FC<GridProps> = ({
   onSelectTab,
   isCopied,
   onCopyArgument,
+  onOpenVerbatimDiff,
   getDeltaBadgeStyle,
 }) => {
   const primaryDelta = pair.statutory_deltas[0];
@@ -1272,18 +1501,36 @@ const GridConcordanceCard: React.FC<GridProps> = ({
       {/* Card Footer */}
       <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs">
         <span className="text-[11px] text-muted-foreground">Section 8 GCA Continuity</span>
-        <button
-          onClick={onCopyArgument}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all cursor-pointer shadow-xs"
-          style={{
-            background: isCopied ? "var(--seal-disposed)" : "var(--brass-soft)",
-            color: isCopied ? "#ffffff" : "var(--brass-bright)",
-            border: "1px solid var(--hairline)",
-          }}
-        >
-          {isCopied ? <Check size={13} /> : <Copy size={13} />}
-          <span>{isCopied ? "Copied" : "Copy Pleading"}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {onOpenVerbatimDiff && (
+            <button
+              onClick={() => onOpenVerbatimDiff(pair.id)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-medium text-xs transition-all cursor-pointer shadow-xs border"
+              style={{
+                background: "var(--surface)",
+                borderColor: "var(--brass)",
+                color: "var(--brass-bright)",
+              }}
+              title="Inspect word-for-word red/green diff"
+            >
+              <Split size={12} />
+              <span>Diff</span>
+            </button>
+          )}
+
+          <button
+            onClick={onCopyArgument}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all cursor-pointer shadow-xs"
+            style={{
+              background: isCopied ? "var(--seal-disposed)" : "var(--brass-soft)",
+              color: isCopied ? "#ffffff" : "var(--brass-bright)",
+              border: "1px solid var(--hairline)",
+            }}
+          >
+            {isCopied ? <Check size={13} /> : <Copy size={13} />}
+            <span>{isCopied ? "Copied" : "Copy Pleading"}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import SuitsBaseException
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.api import auth, search, cases, orders, chat, bookmarks, history, analytics, files, documents, statutes, counter_pleading
+from app.api import auth, search, cases, orders, chat, bookmarks, history, analytics, files, documents, statutes, counter_pleading, drafting, adversarial, precedents
 from app.clients.ecourts_client import ecourts_client
 from app.clients.kanoon_client import kanoon_client
 from app.services.cache_service import cache_service
@@ -178,6 +178,9 @@ app.include_router(files.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
 app.include_router(statutes.router, prefix="/api")
 app.include_router(counter_pleading.router, prefix="/api")
+app.include_router(drafting.router, prefix="/api")
+app.include_router(adversarial.router, prefix="/api")
+app.include_router(precedents.router, prefix="/api")
 
 
 @app.get("/")

@@ -1,0 +1,1313 @@
+# Implementation Plan: Pillar 1 — Court-Ready Drafting & Paper-Book Export
+
+## 1. Executive Summary
+
+This plan details the technical architecture and execution steps for **Pillar 1** in SUITS:
+1. **Dedicated Procedural Court Drafting Templates Suite**: 9 structured Indian court pleading templates covering Criminal, Civil, and Constitutional litigation.
+2. **Native `.docx` Paper-Book Export Engine**: Registry-grade Microsoft Word exporter enforcing Indian High Court and Supreme Court filing rules (1.75" left margin, 1.5" top, 1.5 line spacing, 13/14pt typography, Index of Papers, Chronology, Affidavits).
+3. **Deterministic Missing-Fact Deficit / Gap Flagging Engine**: Systemic anti-hallucination guard that detects missing procedural variables and injects highlighted `[REQUIRED: ...]` placeholders.
+
+---
+
+## 2. Architecture & System Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Advocate as Advocate / Chamber
+    participant UI as LegalEditor.tsx / DocumentPage
+    participant API as /drafting Router (FastAPI)
+    participant Engine as DraftingTemplatesService
+    participant LLM as AI Orchestrator (Gemini / Ollama)
+    participant Guard as DeficitGuardService
+    participant Docx as DocxExportService
+
+    Advocate->>UI: Select Template (e.g., Anticipatory Bail u/s 482 BNSS)
+    Advocate->>UI: Input Case Facts / Attach Case Papers
+    UI->>API: POST /api/drafting/generate (template_id, facts, cnr, metadata)
+    API->>Engine: Build Structured Prompt & Schema
+    Engine->>LLM: Stream Synthesis with Strict Negative Constraints
+    LLM-->>Engine: Raw Pleading Draft
+    Engine->>Guard: Scan & Audit Statutory Variables
+    Guard-->>Engine: Draft with [REQUIRED: ...] Placeholders & Deficit Checklist
+    Engine-->>API: Structured Drafting JSON
+    API-->>UI: Render in LegalEditor with Interactive Deficit Chips
+    Advocate->>UI: Edit / Fill Deficits / Add Citations
+    Advocate->>UI: Click "Export Court Paper-Book (.docx)"
+    UI->>API: POST /api/drafting/export-docx (html_content, metadata)
+    API->>Docx: Generate Registry-Grade .docx (python-docx)
+    Docx-->>API: Binary .docx Stream (1.75" Left Margin, Index, Dates)
+    API-->>Advocate: Instant File Download
+```
+
+---
+
+## 3. Detailed Component Architecture
+
+### 3.1 Backend Architecture
+
+```
+backend/app/
+├── api/
+│   └── drafting.py                  <-- New router for drafting & docx export
+├── schemas/
+│   └── drafting.py                  <-- Pydantic request/response schemas
+├── services/
+│   ├── drafting_templates_service.py <-- Core prompt builder & template catalog
+│   ├── deficit_guard_service.py      <-- Statutory variable validator & gap auditor
+│   └── docx_export_service.py        <-- python-docx court paper-book compiler
+└── prompts/
+    └── drafting_templates_prompts.py <-- Registry-compliant prompts per court format
+```
+
+#### A. Template Catalog (`drafting_templates_service.py`)
+Nine standardized formats will be implemented with discrete statutory rules:
+
+1. **Criminal Law Suite**:
+   - **Anticipatory Bail Application** (`CRIMINAL_ANTICIPATORY_BAIL`):
+     - *Provisions*: Section 438 CrPC / Section 482 BNSS.
+     - *Mandatory Clauses*: Ground for apprehension, lack of custodial interrogation requirement, willingness to join investigation, non-tampering undertaking, parity grounds (if co-accused granted bail).
+   - **Regular Bail Application** (`CRIMINAL_REGULAR_BAIL`):
+     - *Provisions*: Section 437, 439 CrPC / Section 480, 483 BNSS.
+     - *Mandatory Clauses*: Period of incarceration, completion of investigation / filing of charge-sheet, medical/humanitarian grounds, triple test compliance (flight risk, witness influence, evidence tampering).
+   - **FIR / Charge-Sheet Quashing Petition** (`CRIMINAL_QUASHING_482`):
+     - *Provisions*: Section 482 CrPC / Section 528 BNSS.
+     - *Mandatory Clauses*: *State of Haryana v. Bhajan Lal* 7-point quashing test, civil dispute given criminal color, absence of *prima facie* ingredients, abuse of judicial process.
+   - **Cheque Bounce Criminal Complaint** (`CRIMINAL_SECTION_138_NI`):
+     - *Provisions*: Section 138 & 142 Negotiable Instruments Act, 1881.
+     - *Mandatory Clauses*: Legally enforceable debt, cheque presentation within 3 months, cheque return memo date & reason code, statutory demand notice sent within 30 days, 15-day cure window expiry, complaint filed within 30 days of cause of action.
+
+2. **Civil & Constitutional Suite**:
+   - **Writ Petition under Article 226 / Article 32** (`CIVIL_WRIT_PETITION`):
+     - *Jurisdiction*: High Court (Art. 226) / Supreme Court (Art. 32).
+     - *Mandatory Clauses*: Violation of fundamental / legal rights, non-availability of equally efficacious alternative statutory remedy, lack of delay and laches, prayer clause for Writ of Mandamus/Certiorari/Habeas Corpus, and Interim Injunction/Stay application.
+   - **Special Leave Petition** (`CIVIL_CRIMINAL_SLP`):
+     - *Jurisdiction*: Supreme Court of India under Article 136.
+     - *Mandatory Clauses*: Question of law of general public importance, impugned final judgment details, certificate of fitness declaration, statement of case, grounds for special leave.
+   - **Plaint & Written Statement** (`CIVIL_PLAINT_WS`):
+     - *Provisions*: Order VII & Order VIII Code of Civil Procedure (CPC).
+     - *Mandatory Clauses*: Territorial and pecuniary jurisdiction, cause of action date and survival, valuation of suit, court fees paid, para-wise specific denials (no general denials), statutory counter-claims/set-offs.
+   - **Standard Court Vakalatnama** (`COURT_VAKALATNAMA`):
+     - *Jurisdiction*: Supreme Court, High Court, District Court selector.
+     - *Mandatory Clauses*: Power of attorney, right to compromise, advocate welfare stamp declaration, client verification.
+   - **Statutory Legal / Demand Notice** (`CIVIL_LEGAL_NOTICE`):
+     - *Mandatory Clauses*: Statement of facts, specific breach, quantified claims with interest, 15-day/30-day compliance deadline, reservation of rights for civil damages and criminal prosecution.
+
+---
+
+#### B. Deterministic Missing-Fact Deficit Flagging (`deficit_guard_service.py`)
+
+To eliminate hallucination, the deficit engine operates in two synchronized layers:
+
+1. **Layer 1: Negative Constraint Prompting**:
+   - The LLM is explicitly barred from generating synthetic dates, amounts, FIR numbers, or names.
+   - If a statutory requirement is missing from the input, it is instructed to emit:
+     `[REQUIRED: <Clear Description of What is Missing>]` or `[CRITICAL MISSING FACT: <Detail>]`.
+
+2. **Layer 2: Post-Processing Rule Engine**:
+   - The generated draft is evaluated against a mandatory checklist:
+     - *Bail*: Is the FIR number present? Is the Police Station specified? Is the arrest status indicated?
+     - *Section 138*: Is the cheque date present? Is the cheque amount specified? Is the notice delivery date present?
+     - *Writ*: Is the impugned order date specified?
+   - Any missing field not caught by the LLM is flagged, and the text is annotated with a structured `<mark class="legal-deficit">` tag for the frontend editor.
+
+---
+
+#### C. Native `.docx` Paper-Book Export Engine (`docx_export_service.py`)
+
+Using `python-docx`, the exporter builds genuine Word files matching Indian court registry standards:
+
+* **Page Setup & Margins**:
+  - Paper: Standard ISO A4 (`210mm × 297mm`).
+  - Left Margin: **1.75 inches** (`126 pt` / `44.45 mm`) — mandatory gutter for court string/thread binding.
+  - Top Margin: **1.5 inches** (`108 pt` / `38.1 mm`).
+  - Right Margin: **1.0 inch** (`72 pt` / `25.4 mm`).
+  - Bottom Margin: **1.0 inch** (`72 pt` / `25.4 mm`).
+
+* **Typography & Styles**:
+  - Body Font: Bookman Old Style or Times New Roman, **13.5 pt / 14 pt**.
+  - Line Spacing: Strictly **1.5 lines** (Line spacing rule `1.5` in docx).
+  - Paragraph Alignment: Justified with standard `0.5 inch` first-line indent.
+  - Section Headings: Centered, Bold, **14 pt / 15 pt**, Uppercase.
+
+* **Paper-Book Structure**:
+  1. **Listing Proforma / Synopsis** (Summary table of the case).
+  2. **Index of Papers** (Item No., Description of Document, Page Number range).
+  3. **List of Dates & Events** (Chronological two-column table: Date on left, Event on right).
+  4. **Court Cause Title & Memo of Parties**.
+  5. **Numbered Paragraphs** with formal opening (*"MOST RESPECTFULLY SHEWETH:"*).
+  6. **Grounds & Prayer Clause**.
+  7. **Statutory Verification Affidavit** (with Deponent identification, Oath Commissioner space, and verification block).
+
+---
+
+### 3.2 Frontend Architecture
+
+```
+frontend/src/
+├── components/document/
+│   ├── LegalEditor.tsx             <-- Upgrade with Template Selector & .docx download
+│   ├── DraftingTemplateModal.tsx   <-- New: Wizard to select template & enter facts
+│   ├── DeficitHighlighter.tsx      <-- New: Floating deficit counter & jump-to-gap
+│   └── QuickInsertToolbar.tsx      <-- Enhanced: Insert cause titles, affidavits, dates
+└── services/
+    └── drafting.ts                 <-- API client for /api/drafting
+```
+
+* **Drafting Template Modal (`DraftingTemplateModal.tsx`)**:
+  - Categorized tabbed dialog (Criminal, Civil, Constitutional).
+  - Quick-fill intake fields (Court, Parties, FIR No., Cheque No., Core Facts).
+  - One-click "Generate Court-Ready Draft" button.
+* **Interactive Deficit Chip**:
+  - Highlights `[REQUIRED: ...]` in amber/gold.
+  - Clicking a deficit chip opens an inline micro-input to fill the missing date or fact; entering the value instantly replaces the placeholder in the editor.
+* **Court Paper-Book Download Button**:
+  - Replaces the legacy `.doc` HTML blob with a direct call to the backend `/api/drafting/export-docx` endpoint.
+  - Downloads a genuine, styled `.docx` ready for registry filing.
+
+### 3.3 Strict Adherence to SUITS UI/UX Design System
+
+To guarantee 100% aesthetic and ergonomic fidelity with the existing application, all new drafting UI components must strictly adhere to SUITS's established design tokens and interaction patterns:
+
+1. **Theme Tokens & Color Palette**:
+   - **Primary Accent**: Brand Brass/Gold (`var(--brass)`, `var(--brass-bright)`, `var(--brass-soft)`).
+   - **Surfaces & Panels**: `var(--surface)`, `var(--surface-raised)`, `var(--surface-container)`.
+   - **Borders & Dividers**: `var(--hairline)`, `var(--border)`, `var(--lg-border)` with subtle transparency.
+   - **Typography**:
+     - *Headings & Titles*: `var(--font-display)` (Newsreader serif) for formal court-grade dignity.
+     - *Interface Text*: `var(--font-sans)` (Inter clean sans-serif).
+     - *Legal Paper*: `Bookman Old Style` / `Times New Roman` serif, justified text on Cream Court Paper (`#FBF9F1`).
+
+2. **Modal Architecture (Mirroring `CounterPleadingModal.tsx`)**:
+   - **Backdrop**: `fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm animate-fade-in`.
+   - **Dialog Container**: `w-full max-w-4xl h-[88vh] rounded-2xl flex flex-col overflow-hidden border border-[var(--hairline)] bg-[var(--surface)] shadow-2xl`.
+   - **Header Bar**: `px-6 py-4 border-b border-[var(--hairline)] bg-[var(--surface-raised)]` with a brass icon box (`w-8 h-8 rounded-lg bg-[var(--brass-soft)] text-[var(--brass-bright)]`).
+   - **Category Tabs**: Category selector (Criminal, Civil, Constitutional) using `rounded-xl p-1 bg-[var(--surface-container)]` with brass active pill.
+   - **Action Buttons**: `btn btn-primary text-xs flex items-center gap-1.5` with gold gradient / box-shadow (`0 2px 10px rgba(197, 160, 89, 0.2)`).
+
+3. **Sub-Navigation in `DocumentPage.tsx`**:
+   - The new "Court Templates" action button sits directly beside "My Drafts" and "Counter-Pleading (Order VIII)":
+     `className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"` styled with `var(--brass)` / `var(--brass-soft)`.
+
+4. **Visual Treatment of Deficit Flags (`[REQUIRED: ...]`)**:
+   - Highlighted in the editor with a subtle legal amber glow:
+     `background: rgba(212, 136, 6, 0.14); border: 1px dashed #d48806; color: #d48806; border-radius: 4px; padding: 1px 6px; font-weight: 600; font-family: monospace; cursor: pointer;`
+   - **Hover / Click Popover**: Sleek dark popover with a micro input field and a "Fill" button, seamlessly replacing the gap inline without breaking paragraph layout.
+
+5. **Toast Notifications & Feedback**:
+   - Powered by `sonner`: `toast.success("Court-ready draft synthesized")`, `toast.info("Generating registry .docx...")`, `toast.error(...)`.
+
+---
+
+## 4. API Specification
+
+### Endpoint 1: List Available Templates
+* **Route**: `GET /api/drafting/templates`
+* **Response**:
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "CRIMINAL_ANTICIPATORY_BAIL",
+      "category": "criminal",
+      "title": "Anticipatory Bail Application",
+      "provisions": ["Section 438 CrPC", "Section 482 BNSS"],
+      "description": "Bail in anticipation of arrest in non-bailable offences.",
+      "required_fields": ["court_name", "fir_number", "police_station", "allegations_summary"]
+    },
+    {
+      "id": "CRIMINAL_SECTION_138_NI",
+      "category": "criminal",
+      "title": "Cheque Bounce Complaint",
+      "provisions": ["Section 138 & 142 Negotiable Instruments Act"],
+      "description": "Criminal complaint for dishonour of cheque.",
+      "required_fields": ["cheque_number", "cheque_date", "cheque_amount", "notice_date"]
+    }
+  ]
+}
+```
+
+### Endpoint 2: Generate Pleading Draft
+* **Route**: `POST /api/drafting/generate`
+* **Request**:
+```json
+{
+  "template_id": "CRIMINAL_ANTICIPATORY_BAIL",
+  "court_name": "IN THE COURT OF SESSIONS JUDGE AT NEW DELHI",
+  "applicant_name": "Ramesh Kumar",
+  "respondent_name": "State of NCT of Delhi",
+  "fir_number": "FIR No. 124/2026",
+  "police_station": "Hauz Khas",
+  "sections_alleged": "Sections 420, 406 IPC / 316, 318 BNS",
+  "factual_narrative": "Applicant is an independent accountant with no financial custody...",
+  "cnr": "DLHC010023452026"
+}
+```
+* **Response**:
+```json
+{
+  "status": "success",
+  "data": {
+    "title": "Anticipatory Bail Application - Ramesh Kumar",
+    "html_content": "<div class='court-cause-title'>...</div>...",
+    "deficits_found": [
+      {
+        "placeholder": "[REQUIRED: Date of Apprehension Notice/Police Visit]",
+        "variable_key": "apprehension_date",
+        "severity": "CRITICAL"
+      }
+    ],
+    "template_id": "CRIMINAL_ANTICIPATORY_BAIL"
+  }
+}
+```
+
+### Endpoint 3: Export Native `.docx` Paper-Book
+* **Route**: `POST /api/drafting/export-docx`
+* **Request**:
+```json
+{
+  "html_content": "<div>...full court draft...</div>",
+  "document_title": "Anticipatory_Bail_Ramesh_Kumar",
+  "font_family": "Bookman Old Style",
+  "font_size_pt": 13.5,
+  "left_margin_inches": 1.75
+}
+```
+* **Response**: Binary stream with header:
+  `Content-Disposition: attachment; filename="Anticipatory_Bail_Ramesh_Kumar.docx"`
+
+---
+
+## 5. Step-by-Step Implementation Phases
+
+```mermaid
+flowchart TD
+    Step1["Step 1: Backend Schemas & Templates Catalog"] --> Step2["Step 2: Deficit Guard & Prompt Service"]
+    Step2 --> Step3["Step 3: python-docx Paper-Book Exporter"]
+    Step3 --> Step4["Step 4: FastAPI Router & Endpoints"]
+    Step4 --> Step5["Step 5: Frontend Template Modal & Deficit Chips"]
+    Step5 --> Step6["Step 6: Integration in LegalEditor.tsx & E2E Verification"]
+```
+
+* **Step 1: Schemas & Prompts (`app/schemas/drafting.py`, `app/prompts/drafting_templates_prompts.py`)**:
+  - Define all 9 template models, input payloads, and validation constraints.
+  - Author court-grade prompts enforcing Indian cause-title formatting and paragraph structures.
+
+* **Step 2: Deficit Guard Service (`app/services/deficit_guard_service.py`)**:
+  - Implement statutory checklist auditing per template.
+  - Add regex parsers to guarantee placeholders follow standard `[REQUIRED: ...]` syntax.
+
+* **Step 3: Docx Export Service (`app/services/docx_export_service.py`)**:
+  - Implement page setup with `1.75"` left binding margin, `1.5"` top margin.
+  - Implement table generators for **Index of Papers** and **Dates & Events**.
+  - Convert HTML paragraphs, bolding, underlines, and alignments into pure `docx` runs and paragraphs.
+
+* **Step 4: API Router (`app/api/drafting.py`)**:
+  - Register `/api/drafting` in `app/main.py`.
+  - Connect generation, audit, and `.docx` streaming endpoints with auth dependency.
+
+* **Step 5: Frontend Components**:
+  - Build `DraftingTemplateModal.tsx` for easy template selection and fact ingestion.
+  - Add deficit highlighting styles in `index.css` and click-to-edit deficit chips.
+
+* **Step 6: LegalEditor & DocumentPage Integration**:
+  - Hook the template generator directly into `LegalEditor.tsx`.
+  - Replace the old `.doc` download with a native `.docx` server download.
+  - Test generating Anticipatory Bail, S.138 Cheque Bounce, and Writ Petition end-to-end.
+
+---
+
+## 6. Verification & Quality Acceptance Criteria
+
+1. **Format Accuracy**:
+   - The generated document must include formal Cause Title, Memo of Parties, Opening Formula (*"MOST RESPECTFULLY SHEWETH:"*), Chronology of Dates & Events, Numbered Paragraphs, Grounds, Prayer, and Verification Affidavit.
+2. **Deficit Flagging Test**:
+   - Omitting critical facts (e.g., date of statutory demand notice in a Section 138 complaint) must produce an explicit `[REQUIRED: ...]` badge rather than invented placeholder numbers.
+3. **Registry Margin Compliance**:
+   - The exported `.docx` must open in Microsoft Word or LibreOffice with an exact `1.75 inch` left margin, `1.5 inch` top margin, and justified text.
+4. **Build & Test**:
+   - Backend pytest suite passes with 100% green tests on schema validation and docx compilation.
+   - Frontend compiles cleanly with `tsc -b && vite build`.
+
+
+
+
+
+
+
+
+
+
+# Pillar 2: Strategic Adversarial Intelligence & Argument Builder
+## Detailed Technical Implementation Plan
+
+---
+
+### Executive Summary
+
+**Pillar 2: Strategic Adversarial Intelligence & Argument Builder** transforms SUITS from an assistive drafting tool into an **adversarial litigation war room**. 
+
+In high-stakes Indian litigation before the Supreme Court, High Courts, and commercial/civil benches, an advocate must never argue a petition in a vacuum. A master advocate anticipates the opposing counsel's counter-moves, prepares preemptive rejoinder rebuttals, evaluates the rigid 3-prong standard for interim stay relief, and eliminates procedural landmines before the bench or registry raises them.
+
+This implementation plan delivers three interconnected, courtroom-tested capabilities:
+1. **Bilateral Opposition Strategy Mapping (4-Column Matrix)**: Maps every core legal ground of the moving party against the opponent's anticipated counter-attacks, proactive rejoinder rebuttals, and verified landmark ratio decidendi.
+2. **Interim Stay & Ad-Interim Injunction Counter-Strike Module**: Evaluates urgent stay reliefs under the mandatory 3-prong judicial test (*Prima Facie Case*, *Balance of Convenience*, and *Irreparable Injury*), generating both stay-seeking averments and stay-vacation grounds.
+3. **Procedural Weakness Radar & Risk Scoring**: A deterministic scanner combined with legal AI analysis that surfaces statutory bars (Limitation, Section 12A Commercial Courts Act, Section 65B/63 BSA evidence certification, Section 141 NI Act averments) before opposing counsel can file a preliminary objection.
+
+---
+
+### System Architecture Overview
+
+```mermaid
+flowchart TD
+    subgraph Frontend["Frontend Layer (React + TypeScript + Tailwind)"]
+        UI_Trigger["DocumentPage / LegalEditor Action Bar<br/>('Adversarial Strategy' & 'Opposition Radar')"]
+        Modal["AdversarialStrategyModal.tsx<br/>(Glassmorphism & Multi-Perspective Hub)"]
+        Tab1["OppositionMatrixView.tsx<br/>(4-Column Interactive Chessboard)"]
+        Tab2["InterimStayView.tsx<br/>(3-Prong Judicial Stay Analyzer)"]
+        Tab3["WeaknessRadarView.tsx<br/>(Procedural Defect Scanner & Cure Clauses)"]
+        UI_Trigger --> Modal
+        Modal --> Tab1
+        Modal --> Tab2
+        Modal --> Tab3
+    end
+
+    subgraph Backend["Backend API Layer (FastAPI)"]
+        API["/api/adversarial/*"]
+        Router_Matrix["POST /api/adversarial/matrix"]
+        Router_Stay["POST /api/adversarial/interim-stay"]
+        Router_Radar["POST /api/adversarial/weakness-radar"]
+        Router_Export["POST /api/adversarial/export-brief"]
+        API --> Router_Matrix
+        API --> Router_Stay
+        API --> Router_Radar
+        API --> Router_Export
+    end
+
+    subgraph Engine["Strategic Adversarial Core Engine"]
+        Orchestrator["AIOrchestrator<br/>(Gemini 2.5 Flash / Groq / Local Ollama)"]
+        Radar_Rules["WeaknessRadarService<br/>(12+ Statutory & Registry Checklists)"]
+        Adversarial_Service["AdversarialService<br/>(Matrix Synthesis & Precedent Grounding)"]
+        Citations["CitationService & Indian Kanoon<br/>(Verified Landmark Ratios)"]
+    end
+
+    Tab1 --> Router_Matrix
+    Tab2 --> Router_Stay
+    Tab3 --> Router_Radar
+    Router_Matrix --> Adversarial_Service
+    Router_Stay --> Adversarial_Service
+    Router_Radar --> Radar_Rules
+    Adversarial_Service --> Orchestrator
+    Adversarial_Service --> Citations
+    Radar_Rules --> Orchestrator
+```
+
+---
+
+## 1. Feature Specifications & Requirements
+
+### 1.1 Bilateral Opposition Strategy Mapping (4-Column Matrix)
+
+#### Purpose
+Simulates opposing counsel's mindset to expose vulnerabilities in petitioner's claims, providing tailored rebuttals and binding precedent before court arguments.
+
+#### 4-Column Layout Architecture
+| Column 1: Petitioner Ground | Column 2: Anticipated Opposition Vector | Column 3: Grounded Strategic Rebuttal | Column 4: Governing Ratio Decidendi |
+| :--- | :--- | :--- | :--- |
+| **Core Assertion & Statutory Basis**<br/>e.g., *Arbitrary termination of concessionaire agreement without show-cause notice violates Article 14.* | **Anticipated Opposing Attack**<br/>e.g., *Dispute arises strictly out of commercial contract; writ jurisdiction under Art. 226 barred; alternate remedy via Section 9/11 Arbitration exists.* | **Proactive Counter-Strike / Rejoinder**<br/>e.g., *State action even in contractual realm must adhere to non-arbitrariness; public law element is triggered when monopoly power is exercised.* | **Binding Landmark Precedent**<br/>• *ABL International Ltd. v. ECGC (2004) 3 SCC 553* (Para 27)<br/>• *Harbanslal Sahnia v. IOC (2003) 2 SCC 107*<br/>*Ratio: Alternate remedy is a rule of discretion, not an absolute bar.* |
+
+#### Interactive UX Features:
+* **"Inject into Active Draft"**: Injects the selected rebuttal argument directly into the user's `LegalEditor` sheet at the current cursor location or as a formal rejoinder paragraph.
+* **"Copy Rebuttal"**: Copies formatted court submission with proper paragraph styling to the clipboard.
+* **Filter by Issue**: Filter matrix rows by category (`Jurisdiction`, `Limitation`, `Merits & Evidence`, `Natural Justice`, `Statutory Bar`).
+* **Tone & Posture Toggle**: Switch between *Petitioner / Applicant Posture* (offensive) and *Respondent / Defense Posture* (defensive counter-strike).
+
+---
+
+### 1.2 Interim Stay & Ad-Interim Injunction Counter-Strike Module
+
+#### Purpose
+Evaluates and structures urgent stay applications and vacation petitions according to the Supreme Court's mandatory 3-prong test:
+
+```mermaid
+graph TD
+    Test["3-Prong Judicial Injunction Standard"]
+    P1["1. Prima Facie Case<br/>• Serious question to be tried<br/>• High probability of success<br/>• Manifest illegality"]
+    P2["2. Balance of Convenience<br/>• Comparative mischief<br/>• Preservation of status quo<br/>• Public interest balance"]
+    P3["3. Irreparable Injury<br/>• Inadequacy of monetary damages<br/>• Threat of rendered infructuous<br/>• Personal liberty / Solvency"]
+    Test --> P1
+    Test --> P2
+    Test --> P3
+```
+
+#### Dual-Role Capabilities:
+1. **Mode A: Moving Party (Seeking Interim Relief)**:
+   * Formulates persuasive grounds for urgent ad-interim ex-parte stay.
+   * Asserts why irreparable harm would occur if notice is issued without immediate status quo.
+   * Cites *Morgan Stanley Mutual Fund v. Kartick Das (1994) 4 SCC 225* compliance factors.
+2. **Mode B: Resisting Party (Opposing or Vacating Stay)**:
+   * Generates counter-pleadings under Order XXXIX Rule 4 CPC or vacation averments.
+   * Pinpoints suppression of material facts, delay/laches, or lack of clean hands.
+   * Generates an "Undertaking in Lieu of Injunction" compromise proposal if complete denial is risky.
+
+---
+
+### 1.3 Procedural Weakness Radar & Risk Scoring
+
+#### Purpose
+Identifies dangerous technical and procedural defects before the opposing counsel or court master raises them.
+
+#### Statutory & Procedural Checks Enforced:
+1. **Limitation Act, 1963**: Checks whether claims fall within statutory schedules (e.g., 3 years for recovery, 30/90 days for appeals); triggers condonation of delay warning u/s 5.
+2. **Section 12A, Commercial Courts Act, 2015**: Verifies mandatory pre-institution mediation compliance (*Patil Automation Pvt. Ltd. v. Rakheja Engineers*).
+3. **Section 65B IEA / Section 63 BSA**: Flags missing electronic evidence certificates for emails, WhatsApp chats, and digital records.
+4. **Section 80 CPC / Statutory Notice**: Flags failure to issue mandatory 60-day statutory notice prior to suing the Government.
+5. **Section 141, NI Act**: In Section 138 cheque bounce matters, flags missing specific averments detailing how an accused director was actively in charge of business affairs (*SMS Pharmaceuticals Ltd.*).
+6. **Order VII Rule 11 CPC**: Flags lack of cause of action, undervaluation of court fees, or statutory bar.
+7. **Article 226 Alternate Remedy Doctrine**: Flags availability of statutory appellate tribunals (e.g., DRT, NCLT, NGT, CESTAT).
+
+#### Visual Risk Scoring:
+* **Composite Risk Index**: Score from 0 to 100% (Green: Low Risk, Amber: Caution Needed, Red: Critical Defect).
+* **Severity Tiers**:
+  * `CRITICAL` (Threshold dismissal risk — e.g., missing Section 12A mediation without urgent relief prayer).
+  * `HIGH` (Heavy vulnerability — e.g., uncertified digital records, unserved necessary parties).
+  * `MEDIUM` (Arguable evidentiary objection).
+  * `LOW` (Clerical/Formal discrepancy).
+* **"One-Click Cure Clause"**: Provides exact drafted paragraphs to cure the defect immediately (e.g., urgent interim prayer clause satisfying Section 12A exemption, or Section 5 limitation condonation affidavit).
+
+---
+
+## 2. Backend Technical Design
+
+### 2.1 File Structure
+
+```
+backend/app/
+├── api/
+│   └── adversarial.py                     # FastAPI router (/api/adversarial/*)
+├── schemas/
+│   └── adversarial.py                     # Pydantic request/response models
+├── prompts/
+│   └── adversarial_prompts.py             # System prompts with negative constraints
+└── services/
+    ├── adversarial_service.py             # Matrix & Interim Stay synthesis
+    └── weakness_radar_service.py          # Deterministic rules + AI defect scanner
+```
+
+---
+
+### 2.2 Pydantic Data Contracts (`app/schemas/adversarial.py`)
+
+```python
+from __future__ import annotations
+from typing import List, Optional, Literal
+from pydantic import BaseModel, Field
+
+# ── 4-Column Opposition Matrix Models ──
+class MatrixRow(BaseModel):
+    id: str = Field(..., description="Unique row identifier")
+    category: Literal["Jurisdiction", "Limitation", "Merits & Evidence", "Natural Justice", "Statutory Bar", "General"]
+    moving_party_ground: str = Field(..., description="Primary argument / ground of moving party")
+    opposing_attack_vector: str = Field(..., description="Anticipated counter-argument or vulnerability exploited")
+    strategic_rebuttal: str = Field(..., description="Grounded counter-strike and rejoinder argument")
+    governing_citation: str = Field(..., description="Case name, reporter citation, and specific paragraph")
+    ratio_decidendi: str = Field(..., description="One-line core legal principle established by precedent")
+    strength_score: int = Field(..., ge=1, le=10, description="Rebuttal resilience score (1-10)")
+
+class OppositionMatrixRequest(BaseModel):
+    document_id: Optional[str] = None
+    raw_text: Optional[str] = None
+    case_title: Optional[str] = None
+    forum: Optional[str] = "High Court"
+    advocate_posture: Literal["petitioner", "respondent"] = "petitioner"
+    specific_concerns: Optional[str] = None
+
+class OppositionMatrixResponse(BaseModel):
+    case_title: str
+    forum: str
+    advocate_posture: str
+    executive_summary: str
+    rows: List[MatrixRow]
+    overall_strength_assessment: str
+
+# ── Interim Stay Analyzer Models ──
+class ThreeProngItem(BaseModel):
+    prong_name: Literal["Prima Facie Case", "Balance of Convenience", "Irreparable Injury"]
+    moving_party_argument: str
+    opposing_counter_argument: str
+    adjudication_guidance: str
+    landmark_precedent: str
+
+class InterimStayRequest(BaseModel):
+    document_id: Optional[str] = None
+    raw_text: Optional[str] = None
+    stay_relief_sought: str = Field(..., description="Exact interim order sought (e.g. stay on arrest, stay on encashment of BG)")
+    matter_type: Literal["civil_suit", "writ_petition", "arbitration_s9", "criminal_482_quashing", "bail_application"]
+    advocate_side: Literal["seeking_stay", "opposing_stay"] = "seeking_stay"
+
+class InterimStayResponse(BaseModel):
+    matter_type: str
+    advocate_side: str
+    stay_relief_sought: str
+    prongs: List[ThreeProngItem]
+    drafted_stay_clauses: str = Field(..., description="Court-ready drafted averments and interim prayer")
+    vacation_grounds: List[str] = Field(..., description="Key grounds to seek vacation under Order 39 Rule 4 or equivalent")
+
+# ── Weakness Radar Models ──
+class DefectItem(BaseModel):
+    id: str
+    severity: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+    category: str
+    title: str
+    description: str
+    governing_rule: str
+    cure_recommendation: str
+    cure_clause_template: Optional[str] = None
+
+class WeaknessRadarRequest(BaseModel):
+    document_id: Optional[str] = None
+    raw_text: Optional[str] = None
+    court_level: Optional[str] = "High Court"
+
+class WeaknessRadarResponse(BaseModel):
+    risk_score: int = Field(..., ge=0, le=100, description="0=Clean, 100=Extreme fatal defect")
+    risk_tier: Literal["CLEAN", "LOW", "MODERATE", "CRITICAL"]
+    total_defects: int
+    defects: List[DefectItem]
+    procedural_clearance_summary: str
+```
+
+---
+
+### 2.3 Prompt Engineering Strategy (`app/prompts/adversarial_prompts.py`)
+
+#### Negative Anti-Hallucination & Legal Grounding Constraints
+* **Mandatory Real Authorities**: The model must only cite real, verified Indian Supreme Court or High Court judgments. If no exact case is known with certainty, cite statutory provisions directly without inventing citations.
+* **Realistic Adversarial Assessment**: The opposing counsel's arguments must not be strawmen; they must represent aggressive, competent arguments based on actual Indian procedural tactics (Order VII Rule 11, Section 34/9 Arbitration, Section 482 threshold tests from *State of Haryana v. Bhajan Lal*).
+* **Strict JSON Response Format**: Clean JSON serialization for seamless frontend rendering.
+
+---
+
+### 2.4 API Endpoints Specification (`app/api/adversarial.py`)
+
+```
+POST /api/adversarial/matrix
+Headers: Authorization: Bearer <jwt>
+Body: OppositionMatrixRequest
+Returns: APIResponse[OppositionMatrixResponse]
+
+POST /api/adversarial/interim-stay
+Headers: Authorization: Bearer <jwt>
+Body: InterimStayRequest
+Returns: APIResponse[InterimStayResponse]
+
+POST /api/adversarial/weakness-radar
+Headers: Authorization: Bearer <jwt>
+Body: WeaknessRadarRequest
+Returns: APIResponse[WeaknessRadarResponse]
+
+POST /api/adversarial/export-brief
+Headers: Authorization: Bearer <jwt>
+Body: { matrix_data: OppositionMatrixResponse, stay_data?: InterimStayResponse }
+Returns: Binary DOCX stream (.docx) formatted with 1.75" gutter paper-book margins
+```
+
+---
+
+## 3. Frontend UI/UX Design Specifications
+
+### 3.1 Design System Fidelity
+The adversarial module strictly adheres to SUITS design tokens:
+
+| Token | Hex Value | Usage in Pillar 2 |
+| :--- | :--- | :--- |
+| `var(--surface)` | `#0b0d13` | Modal backdrop & container sheets |
+| `var(--surface-raised)` | `#121620` | Matrix table headers, cards, and tabs |
+| `var(--surface-container)` | `#1a1f2c` | Card elevation and input fields |
+| `var(--hairline)` | `rgba(255, 255, 255, 0.08)` | Borders, divider lines, and table cell borders |
+| `var(--brass)` | `#c5a059` | Primary action accents, active tabs, matrix borders |
+| `var(--brass-soft)` | `rgba(197, 160, 89, 0.12)` | Badge backgrounds and pill buttons |
+| `var(--brass-bright)` | `#dfb76c` | Hover highlights and key metrics |
+| `var(--ink)` | `#f3f4f8` | Primary text and headings |
+| `var(--ink-muted)` | `#8c93a8` | Subtitles, secondary text, and hints |
+
+---
+
+### 3.2 Component Hierarchy & Integration
+
+```
+frontend/src/
+├── types/
+│   └── adversarial.ts                     # TypeScript interfaces
+├── services/
+│   └── adversarial.ts                     # Axios API caller
+└── components/
+    └── defense/
+        ├── AdversarialStrategyModal.tsx   # Master modal container (createPortal)
+        ├── OppositionMatrixTable.tsx      # 4-Column responsive grid
+        ├── InterimStayCard.tsx            # 3-Prong visual assessment & stay clauses
+        ├── WeaknessRadarCard.tsx          # Defect scanner checklist & cure clauses
+        └── RebuttalInjectDialog.tsx       # Prompt to insert selected rebuttal into draft
+```
+
+#### Entry Points:
+1. **Document Page Action Bar** (`DocumentPage.tsx`):
+   * Button with `<Swords size={14} />`: **"Adversarial War Room"** next to **"Court Templates"** and **"Draft Defense / WS"**.
+2. **Editor Floating Action** (`LegalEditor.tsx`):
+   * Toolbar button: **"Scan Weaknesses & Opposition"**.
+   * One-click action passes the current document HTML content directly into `AdversarialStrategyModal`.
+
+---
+
+### 3.3 UI Walkthrough: The 4-Column Opposition Matrix View
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  ⚔️ STRATEGIC ADVERSARIAL WAR ROOM                                                          [X Close]   │
+│  Case: Ramesh Chandra v. Union of India | Forum: High Court of Delhi (Art. 226)                        │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  [ ⚔️ Opposition Matrix (4) ]   [ 🛡️ Interim Stay Analyzer ]   [ ⚠️ Procedural Weakness Radar (2) ]      │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  Filter: [ All Issues ] [ Jurisdiction (1) ] [ Limitation (0) ] [ Merits (2) ] [ Natural Justice (1) ] │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  PETITIONER GROUND      OPPOSING COUNSEL ATTACK    STRATEGIC REBUTTAL         AUTHORITY & RATIO        │
+│ ─────────────────────  ─────────────────────────  ─────────────────────────  ───────────────────────── │
+│  Ex-parte blacklisting  "Contractual dispute;      "Natural justice applies   ABL International        │
+│  without show-cause     Writ petition under        to all State actions with  (2004) 3 SCC 553         │
+│  violates Art. 14.      Art. 226 not maintainable  civil consequences, even   Para 27: State contract   │
+│                         due to arbitration clause." in contractual sphere."    actions subject to 14."  │
+│                                                                                                        │
+│                                                   [ Copy Rebuttal ] [ ✍️ Insert into Active Draft ]    │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  [📥 Export Adversarial Brief (.docx)]                   [🔄 Re-Analyze Draft]   [Done / Close]       │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Verification & Testing Strategy
+
+### 4.1 Backend Verification
+1. **Matrix Generation Test**:
+   * Feed a sample Commercial Suit plaint and Writ Petition.
+   * Verify all 4 columns are generated with valid Indian citations (e.g. *ABL International*, *Whirlpool Corporation*).
+2. **Interim Stay Test**:
+   * Feed an urgent stay request against bank guarantee encashment.
+   * Verify 3-prong breakdown (*Prima Facie Case*, *Balance of Convenience*, *Irreparable Harm*) and stay vacation clauses.
+3. **Weakness Radar Deterministic Rule Test**:
+   * Feed a commercial suit missing Section 12A mediation averment.
+   * Verify scanner assigns `CRITICAL` severity and produces the Section 12A exemption cure clause.
+
+### 4.2 Frontend Verification
+1. **Visual Regression**: Confirm dark-mode colors, brass accents, and glassmorphic modal layout.
+2. **Editor Insertion**: Test the "Insert into Active Draft" action; confirm text cleanly updates the active draft in `LegalEditor` without syntax breakage.
+3. **TypeScript Build**: Run `npm run build` and ensure 0 TypeScript or Vite warnings.
+
+---
+
+## 5. Milestone Breakdown
+
+| Milestone | Deliverables | Estimated Files Affected |
+| :--- | :--- | :--- |
+| **Milestone 1** | Backend Schemas, Prompt System & Deterministic Weakness Radar Service | `schemas/adversarial.py`<br/>`prompts/adversarial_prompts.py`<br/>`services/weakness_radar_service.py` |
+| **Milestone 2** | Backend Adversarial Service & FastAPI Router (`/api/adversarial/*`) | `services/adversarial_service.py`<br/>`api/adversarial.py`<br/>`main.py` |
+| **Milestone 3** | Frontend Types, API Service & UI Components (Matrix, Stay, Radar) | `types/adversarial.ts`<br/>`services/adversarial.ts`<br/>`components/defense/AdversarialStrategyModal.tsx`<br/>`components/defense/OppositionMatrixTable.tsx`<br/>`components/defense/InterimStayCard.tsx`<br/>`components/defense/WeaknessRadarCard.tsx` |
+| **Milestone 4** | Integration into `DocumentPage.tsx` and `LegalEditor.tsx` + End-to-End Testing | `pages/DocumentPage.tsx`<br/>`components/document/LegalEditor.tsx`<br/>Backend integration test suite |
+
+
+
+
+
+
+
+
+# Pillar 3: Precedent Research & Precedent Surfacing
+## Detailed Technical Implementation Plan
+
+---
+
+### Executive Summary
+
+**Pillar 3: Precedent Research & Precedent Surfacing** solves one of the most frustrating bottlenecks in Indian legal research: **citation overload without strategic context**. 
+
+Currently, advocates searching databases like Indian Kanoon or eCourts are presented with dozens of raw case titles and hundreds of pages of unparsed judicial text. Advocates are forced to skim 80+ pages of facts, arguments, and quotes just to discern whether a case actually supports their specific factual proposition.
+
+Pillar 3 equips SUITS with three courtroom-grounded capabilities:
+1. **"Why This Helps" Contextual Relevance Badges**: Attaches a single-sentence plain-English justification badge to every precedent, explaining *how* and *why* this ruling supports or damages the advocate's specific proposition.
+2. **Structured 4-Part Verdict Breakdown (Verdict Anatomy Viewer)**: Deconstructs 100+ page judgments into 4 discrete, scannable court modules:
+   * **(1) Core Issues Framed**
+   * **(2) Material Determinative Facts**
+   * **(3) Ratio Decidendi** (Binding legal rule)
+   * **(4) Obiter Dicta & Judicial Observations** (Non-binding guidance & societal remarks)
+3. **Grounded Citation Linker & "Cite at Cursor"**: Links every authority directly to certified Indian Kanoon documents (`/doc/<tid>/`), eliminates hallucinations, and provides a single-click action to inject standard Indian legal citations into active drafts in [`LegalEditor.tsx`](file:///e:/Projects/Suits/frontend/src/components/document/LegalEditor.tsx).
+
+---
+
+### System Architecture Overview
+
+```mermaid
+flowchart TD
+    subgraph Frontend["Frontend Layer (React + TypeScript + Tailwind)"]
+        SearchUI["Search Results & Similar Cases<br/>(SearchResultCard.tsx / SimilarCasesCard.tsx)"]
+        Badge["WhyThisHelpsBadge.tsx<br/>(Amber/Brass Contextual Pill)"]
+        ReaderModal["DocumentReaderModal.tsx<br/>(Adds 'Verdict Anatomy' 4th View Mode)"]
+        AnatomyView["VerdictAnatomyView.tsx<br/>(4-Part Cards: Issues, Facts, Ratio, Obiter)"]
+        Editor["LegalEditor.tsx<br/>('Cite at Cursor' Quick Insertion)"]
+
+        SearchUI --> Badge
+        ReaderModal --> AnatomyView
+        AnatomyView --> Editor
+    end
+
+    subgraph Backend["Backend API Layer (FastAPI)"]
+        API["/api/precedents/*"]
+        Router_Relevance["POST /api/precedents/why-this-helps"]
+        Router_Batch["POST /api/precedents/batch-relevance"]
+        Router_Anatomy["POST /api/precedents/verdict-anatomy"]
+        Router_Cite["POST /api/precedents/format-citation"]
+        
+        API --> Router_Relevance
+        API --> Router_Batch
+        API --> Router_Anatomy
+        API --> Router_Cite
+    end
+
+    subgraph Core["Precedent Intelligence Core"]
+        Orchestrator["AIOrchestrator<br/>(Gemini / Groq / Local Ollama)"]
+        Kanoon["KanoonClient & eCourts<br/>(Raw Judgment Fetcher & Verification)"]
+        AnatomyService["VerdictAnatomyService<br/>(Sudhansu Sekhar Ratio Extraction)"]
+        RelevanceService["ContextualRelevanceService<br/>(Fact-Matching Strategy Synthesizer)"]
+    end
+
+    Router_Relevance --> RelevanceService
+    Router_Batch --> RelevanceService
+    Router_Anatomy --> AnatomyService
+    RelevanceService --> Orchestrator
+    AnatomyService --> Orchestrator
+    AnatomyService --> Kanoon
+```
+
+---
+
+## 1. Feature Specifications & Requirements
+
+### 1.1 "Why This Helps" Contextual Relevance Badges
+
+#### Purpose
+Instead of displaying a cold case title like *State of Punjab v. Baldev Singh (1999) 6 SCC 172*, the system dynamically computes and renders a highlighted badge explaining its factual utility:
+
+> ⚖️ **Why This Helps**: *"Establishes that failure to inform the accused of their right to be searched before a Gazetted Officer or Magistrate under Section 50 NDPS Act renders the recovery unlawful and vitiates conviction."*
+
+#### Capabilities:
+* **Factual Resonance**: Matches the search query or active draft facts against the judgment holding.
+* **Posture Awareness**: Adapts phrasing based on advocate posture:
+  * *For Accused / Defense*: Highlights acquittal grounds, benefit of doubt, lack of compliance with procedural safeguards.
+  * *For Complainant / Prosecution*: Highlights strict liability, statutory presumptions (e.g. Sections 118/139 NI Act), or prima facie burden discharge.
+* **Subtle UI Presentation**: An amber-tinted badge (`var(--brass-soft)`) with brass border, expandable on click to reveal the exact paragraph excerpt.
+
+---
+
+### 1.2 Structured 4-Part Verdict Breakdown (Verdict Anatomy Viewer)
+
+#### Doctrinal Grounding (Ratio vs Obiter Distinction)
+Under Indian jurisprudence (*State of Orissa v. Sudhansu Sekhar Misra (1968) 2 SCR 154* and *Ambica Quarry Works v. State of Gujarat (1987) 1 SCC 213*), a decision is only authority for what it actually decides. Advocates must never confuse non-binding *obiter dicta* with binding *ratio decidendi*.
+
+The **Verdict Anatomy Viewer** enforces this strict judicial separation:
+
+```mermaid
+graph TD
+    Judgment["Complete Court Judgment (50-100+ Pages)"]
+    P1["1. Issues Framed<br/>• Substantive questions of law<br/>• Constitutional references<br/>• Statutory interpretations"]
+    P2["2. Material Facts<br/>• Determinative facts<br/>• Factual timeline<br/>• Procedural journey (Trial -> HC -> SC)"]
+    P3["3. Ratio Decidendi (BINDING)<br/>• Rule of law established<br/>• Authoritative holding<br/>• Specific paragraph references"]
+    P4["4. Obiter Dicta (PERSUASIVE)<br/>• Collateral observations<br/>• Judicial warnings to authorities<br/>• Societal commentary & reform notes"]
+
+    Judgment --> P1
+    Judgment --> P2
+    Judgment --> P3
+    Judgment --> P4
+```
+
+#### Viewer Features:
+1. **Issues Framed Tab**:
+   * Numbered legal questions framed by the bench.
+   * Direct judicial answers (*Allowed*, *Rejected*, *Answered in the Affirmative/Negative*).
+2. **Material Facts & Procedural Journey**:
+   * Chronological sequence of material facts that dictated the outcome.
+   * Previous lower court findings (e.g., Trial Court acquitted -> High Court reversed -> Supreme Court restored trial court).
+3. **Ratio Decidendi Card**:
+   * Highlighted with a distinct brass border and scales icon.
+   * Verified paragraph citation (e.g., *Paragraph 28*).
+   * Exact rule of law formulated by the bench.
+   * Action button: **"Copy Binding Rule"**.
+4. **Obiter Dicta & Observations Card**:
+   * Clear visual indicator: *"Persuasive Only — Not Binding Precedent"*.
+   * Highlights judicial guidance to police, executive, or trial courts.
+5. **Statutes Interpreted Table**:
+   * Listing of each Act, Section, and nature of interpretation (Strict, Purposive, Harmonious).
+
+---
+
+### 1.3 Grounded Citation Linker & "Cite at Cursor"
+
+#### Purpose
+Enables seamless flow from legal discovery directly into the advocate's pleading.
+
+#### Workflow:
+1. When viewing any precedent in Search Results, Similar Cases, or Verdict Anatomy, an advocate clicks **"Cite at Cursor"**.
+2. If [`LegalEditor.tsx`](file:///e:/Projects/Suits/frontend/src/components/document/LegalEditor.tsx) is open, the system injects a formatted Indian court submission at the current cursor position:
+   ```html
+   <p style="text-indent: 40px; margin-bottom: 12px; text-align: justify;">
+     That the legal proposition is firmly settled by the Hon'ble Supreme Court in 
+     <b><i>State of Punjab v. Baldev Singh</i>, (1999) 6 SCC 172</b>, wherein the Constitution Bench laid down:
+   </p>
+   <blockquote style="margin: 12px 40px; font-style: italic; border-left: 2px solid #c5a059; padding-left: 14px;">
+     "The requirement of Section 50 NDPS Act is mandatory and imperative..." (Para 28)
+   </blockquote>
+   ```
+3. Direct Kanoon verification: Every precedent card includes a certified Indian Kanoon badge with a link to `https://indiankanoon.org/doc/<tid>/` to view the original text.
+
+---
+
+## 2. Backend Technical Design
+
+### 2.1 File Architecture
+
+```
+backend/app/
+├── api/
+│   └── precedents.py                      # FastAPI router (/api/precedents/*)
+├── schemas/
+│   └── precedents.py                      # Pydantic request & response models
+├── prompts/
+│   └── precedent_prompts.py               # Precedent extraction prompts with anti-hallucination rules
+└── services/
+    ├── contextual_relevance_service.py    # Generates "Why This Helps" single-line strategic pills
+    └── verdict_anatomy_service.py         # 4-Part Verdict Breakdown (Issues, Facts, Ratio, Obiter)
+```
+
+---
+
+### 2.2 Pydantic Data Contracts (`app/schemas/precedents.py`)
+
+```python
+from __future__ import annotations
+from typing import List, Optional, Literal
+from pydantic import BaseModel, Field
+
+# ── 1. "Why This Helps" Contextual Relevance Models ──
+class RelevanceRequest(BaseModel):
+    query: str = Field(..., description="Advocate search query or case factual summary")
+    case_title: str = Field(..., description="Title of the candidate judgment")
+    court_name: Optional[str] = "Supreme Court of India"
+    decision_date: Optional[str] = None
+    snippet: Optional[str] = Field(None, description="Headnote, snippet, or text excerpt of the case")
+    advocate_posture: Literal["petitioner", "respondent", "general"] = "general"
+
+class RelevanceResponse(BaseModel):
+    case_title: str
+    why_this_helps: str = Field(..., description="Single-sentence strategic relevance summary")
+    relevance_category: Literal["Direct Precedent", "Procedural Shield", "Statutory Interpretation", "Distinguishing Precedent", "Factual Analogy"]
+    strategic_utility: str
+    key_anchor_section: Optional[str] = None
+
+class BatchRelevanceRequest(BaseModel):
+    query: str
+    items: List[RelevanceRequest]
+
+class BatchRelevanceResponse(BaseModel):
+    results: List[RelevanceResponse]
+
+# ── 2. Structured 4-Part Verdict Anatomy Models ──
+class IssueFramedItem(BaseModel):
+    issue_number: int
+    question_of_law: str
+    court_finding: str
+    answered_in_favour_of: Literal["Petitioner / Appellant", "Respondent", "Partly", "Remanded", "Neutral"]
+
+class RatioDecidendiItem(BaseModel):
+    core_rule_of_law: str = Field(..., description="The binding legal principle established by the court")
+    binding_proposition: str = Field(..., description="Precise formulation applicable to future cases")
+    governing_paragraphs: List[str] = Field(default_factory=list, description="Exact paragraphs containing the ratio (e.g. Para 28, 32)")
+    bench_strength: Optional[str] = Field(None, description="e.g., Constitution Bench (5 Judges), Division Bench")
+    precedential_weight: Literal["Binding Supreme Court Precedent", "Binding High Court Precedent", "Persuasive High Court Precedent"]
+
+class ObiterDictaItem(BaseModel):
+    observation: str = Field(..., description="Non-binding judicial observation or guidance")
+    context: str = Field(..., description="Context in which the remark was made")
+    nature: Literal["Societal Commentary", "Guidance to Police/Investigating Agencies", "Legislative Reform Suggestion", "Trial Court Direction"]
+
+class StatuteInterpretedItem(BaseModel):
+    act_name: str
+    section_article: str
+    nature_of_interpretation: Literal["Strict", "Purposive", "Harmonious", "Read Down", "Constitutional Validity Upheld"]
+    interpretation_summary: str
+
+class VerdictAnatomyRequest(BaseModel):
+    cnr: Optional[str] = None
+    tid: Optional[int] = Field(None, description="Indian Kanoon Document ID")
+    raw_text: Optional[str] = Field(None, description="Full judgment text or extracted text")
+    case_title: Optional[str] = None
+    court_name: Optional[str] = None
+
+class VerdictAnatomyResponse(BaseModel):
+    case_title: str
+    official_citation: str
+    kanoon_tid: Optional[int] = None
+    kanoon_url: Optional[str] = None
+    court_name: str
+    decision_date: Optional[str] = None
+    bench_coram: List[str]
+    disposition: str = Field(..., description="e.g., Appeal Allowed, Petition Dismissed, Conviction Set Aside")
+    issues_framed: List[IssueFramedItem]
+    material_facts: List[str]
+    procedural_journey: str = Field(..., description="Summary of trial court -> appellate journey")
+    ratio_decidendi: RatioDecidendiItem
+    obiter_dicta: List[ObiterDictaItem]
+    statutes_interpreted: List[StatuteInterpretedItem]
+    one_line_takeaway: str
+
+# ── 3. Citation Formatter Models ──
+class FormatCitationRequest(BaseModel):
+    case_title: str
+    official_citation: str
+    ratio_summary: str
+    paragraph_number: Optional[str] = None
+    format_type: Literal["standard_indian", "blockquote_pleading", "synopsis_table"] = "standard_indian"
+
+class FormatCitationResponse(BaseModel):
+    plain_text: str
+    html_markup: str
+```
+
+---
+
+### 2.3 Prompt Engineering Design (`app/prompts/precedent_prompts.py`)
+
+#### Critical System Rules:
+1. **Ratio Decidendi Isolation**: The model must never treat statements of facts, arguments of counsel, or non-dispositive comments as the *ratio decidendi*. It must pinpoint only the rule that was necessary to decide the actual dispute.
+2. **"Why This Helps" Conciseness**: The badge text must strictly be 1 active sentence (maximum 28 words). It must state the legal impact directly (e.g. *"Proves that...", "Guarantees that...", "Shields against..."*).
+3. **Indian Citation Accuracy**: Citations must adhere to standard Indian reporting conventions (e.g. `(YYYY) Vol SCC Page`, `AIR YYYY SC Page`, `ILR YYYY HC Page`).
+
+---
+
+### 2.4 API Endpoints Specification (`app/api/precedents.py`)
+
+```
+POST /api/precedents/why-this-helps
+Body: RelevanceRequest
+Returns: APIResponse[RelevanceResponse]
+
+POST /api/precedents/batch-relevance
+Body: BatchRelevanceRequest
+Returns: APIResponse[BatchRelevanceResponse]
+
+POST /api/precedents/verdict-anatomy
+Body: VerdictAnatomyRequest
+Returns: APIResponse[VerdictAnatomyResponse]
+
+POST /api/precedents/format-citation
+Body: FormatCitationRequest
+Returns: APIResponse[FormatCitationResponse]
+```
+
+---
+
+## 3. Frontend UI/UX Design Specifications
+
+### 3.1 Design Tokens & Aesthetics
+Adheres to the established SUITS dark-mode aesthetic:
+
+| Component | Design Token | Specification |
+| :--- | :--- | :--- |
+| **"Why This Helps" Pill** | `var(--brass-soft)` + `var(--brass)` | `background: rgba(197, 160, 89, 0.12); border: 1px solid rgba(197, 160, 89, 0.3); color: var(--brass-bright)` |
+| **Ratio Decidendi Card** | `var(--surface-raised)` | Elevated card with 2px solid `var(--brass)` left accent and Bookman Old Style quote text |
+| **Obiter Dicta Card** | `var(--surface-container)` | Dashed slate border with blue/violet observation pills (`rgba(59, 130, 246, 0.1)`) |
+| **Issues Framed Table** | `var(--surface)` | Numbered badges with green (*Allowed*) or red (*Rejected*) status chips |
+
+---
+
+### 3.2 Component Hierarchy & Integration
+
+```
+frontend/src/
+├── types/
+│   └── precedents.ts                      # Complete TypeScript contracts
+├── services/
+│   └── precedents.ts                      # Axios API caller
+└── components/
+    ├── research/
+    │   ├── WhyThisHelpsBadge.tsx          # Standalone 1-line relevance badge with hover tooltip
+    │   └── CiteAtCursorButton.tsx         # Quick action button to inject citation into LegalEditor
+    └── case/
+        ├── VerdictAnatomyModal.tsx        # Portal modal for 4-part breakdown inspection
+        └── VerdictAnatomyView.tsx         # The 4-tab card layout (Issues, Facts, Ratio, Obiter)
+```
+
+#### Entry Points:
+1. **Search Results Card** (`SearchResultCard.tsx`):
+   * Below the case metadata, renders `<WhyThisHelpsBadge query={currentQuery} item={item} />`.
+   * Adds an **"Inspect Verdict Anatomy"** button opening `VerdictAnatomyModal`.
+2. **Document Reader Modal** (`DocumentReaderModal.tsx`):
+   * Adds `anatomy` view mode tab alongside `pdf`, `text`, and `ai`.
+   * Switching to `anatomy` renders `VerdictAnatomyView` directly in the reading sheet.
+3. **Legal Editor Drafting** (`LegalEditor.tsx`):
+   * Integrates a **"Cite Authority"** quick-action that accepts formatted citation HTML and pastes it at the caret.
+
+---
+
+### 3.3 UI Walkthrough: The 4-Part Verdict Breakdown Layout
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  ⚖️ VERDICT ANATOMY: State of Punjab v. Baldev Singh | (1999) 6 SCC 172                    [X Close]   │
+│  Bench: Constitution Bench (5 Judges) • Forum: Supreme Court • Disposition: Conviction Vitiated        │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  [ 🎯 Issues Framed (2) ]  [ 📋 Material Facts ]  [ ⚖️ Ratio Decidendi (Binding) ]  [ 💡 Obiter Dicta (1) ] │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                        │
+│  BINDING RULE OF LAW (RATIO DECIDENDI)                                           [ ✍️ Cite at Cursor ]  │
+│  ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ "The requirement of Section 50 of the NDPS Act to inform the suspect of his right to be searched │  │
+│  │ before a Gazetted Officer or a Magistrate is mandatory. An illicit article recovered in          │  │
+│  │ contravention of this safeguard cannot be used to secure conviction." (Paras 28 & 32)            │  │
+│  └──────────────────────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                                        │
+│  🎯 SUBSTANTIVE ISSUES FRAMED & ANSWERED                                                               │
+│  • Issue 1: Is compliance with Section 50 NDPS mandatory during personal search?                        │
+│    -> Answered in the AFFIRMATIVE (In favour of Accused)                                               │
+│  • Issue 2: Does an unlawful search automatically vitiate the entire trial?                            │
+│    -> Answered: Recovery is inadmissible, but trial continues for other independent evidence.          │
+│                                                                                                        │
+│  💡 OBITER DICTA & JUDICIAL OBSERVATIONS (NON-BINDING)                                                 │
+│  • "Investigating officers should be sensitized through judicial academies regarding procedural rigor" │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  [🔗 Open Indian Kanoon Certified Document (/doc/1522181/)]               [ Copy Full Citation String ] │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Verification & Testing Strategy
+
+### 4.1 Backend Verification
+1. **Relevance Badge Test**:
+   * Test query: *"Cheque bounce notice received late"* vs case: *Kamlesh Kumar v. State of Bihar*.
+   * Verify generated badge specifically mentions statutory 15-day / 30-day timeline.
+2. **Verdict Anatomy Parsing Test**:
+   * Feed full text of landmark Constitution Bench judgment (*Whirlpool Corp.* or *State of Punjab v. Baldev Singh*).
+   * Verify all 4 sections are returned: `issues_framed`, `material_facts`, `ratio_decidendi`, `obiter_dicta`.
+   * Confirm `ratio_decidendi` isolates the actual binding legal rule.
+3. **Kanoon Doc Link Test**:
+   * Verify integration with Kanoon doc IDs and URL formatting.
+
+### 4.2 Frontend Verification
+1. **Component Rendering**: Verify `WhyThisHelpsBadge` loads asynchronously without blocking search result card rendering.
+2. **Editor Insertion**: Test clicking **"Cite at Cursor"** inside `DocumentReaderModal` and confirm the formatted citation appears at the cursor in `LegalEditor`.
+3. **TypeScript Build**: Run `npm run build` with 0 warnings.
+
+---
+
+## 5. Milestone Breakdown
+
+| Milestone | Deliverables | Key Files |
+| :--- | :--- | :--- |
+| **Milestone 1** | Backend Schemas, Prompt System & Contextual Relevance Service | `schemas/precedents.py`<br/>`prompts/precedent_prompts.py`<br/>`services/contextual_relevance_service.py` |
+| **Milestone 2** | Backend Verdict Anatomy Service & FastAPI Router (`/api/precedents/*`) | `services/verdict_anatomy_service.py`<br/>`api/precedents.py`<br/>`main.py` |
+| **Milestone 3** | Frontend Types, API Service & UI Components (`WhyThisHelpsBadge`, `VerdictAnatomyView`, `VerdictAnatomyModal`) | `types/precedents.ts`<br/>`services/precedents.ts`<br/>`components/research/WhyThisHelpsBadge.tsx`<br/>`components/case/VerdictAnatomyView.tsx`<br/>`components/case/VerdictAnatomyModal.tsx` |
+| **Milestone 4** | Integration into `SearchResultCard.tsx`, `DocumentReaderModal.tsx`, `LegalEditor.tsx` & Verification | `components/search/SearchResultCard.tsx`<br/>`components/case/DocumentReaderModal.tsx`<br/>`components/document/LegalEditor.tsx` |
+
+
+
+
+
+
+
+
+
+# Implementation Plan — Pillar 4: Criminal Reform (CrPC/IPC ↔ BNSS/BNS) Safeguards & Verbatim Diff
+
+## Executive Summary
+
+The enactment of the **Bharatiya Nyaya Sanhita (BNS), 2023**, **Bharatiya Nagarik Suraksha Sanhita (BNSS), 2023**, and **Bharatiya Sakshya Adhiniyam (BSA), 2023** effective **July 1, 2024**, introduced historic friction in Indian criminal practice. Advocates routinely face two severe courtroom risks:
+1. **Unconstitutional Ex Post Facto Charges**: Charging or pleading under BNS penal provisions for acts committed prior to July 1, 2024 violates **Article 20(1)** of the Constitution of India. Conversely, citing repealed IPC sections for post-July 1 offences results in registry defect notices and dismissal.
+2. **Procedural Blindspots in Statutory Transitions**: Critical shifts—such as police custody extension beyond 15 days under Section 187 BNSS, preliminary inquiry under Section 173(3) BNSS, mandatory videography of seizures under Section 105 BNSS, and Section 63 BSA electronic certificates—require word-for-word comparison of additions and deletions against the legacy code.
+
+**Pillar 4** implements a dual-layer safeguard:
+1. **Automated Temporal Incident-Date Safeguard Engine**: Deterministically validates incident dates against the July 1, 2024 constitutional cutoff, routes substantive vs procedural codes, and alerts advocates inside the drafting editor with one-click corrections.
+2. **Verbatim Statutory Red/Green Diff Engine**: Displays word-for-word visual diffs between CrPC/IPC/IEA and BNSS/BNS/BSA provisions, complete with penal status, bailability deltas, and sentencing comparisons.
+3. **Transitional Jurisprudence Live Feed**: Curates authoritative Supreme Court and High Court rulings resolving statutory ambiguities during the transition period.
+
+---
+
+## 1. Architectural Blueprint & Data Flow
+
+```mermaid
+flowchart TD
+    subgraph ClientLayer ["Frontend UI/UX Layer (React + Vite + Tailwind)"]
+        TransitionPage ["/transition (Era Transition Explorer)"]
+        DiffViewer ["Verbatim Statutory Red/Green Diff Viewer"]
+        TemporalInspector ["Temporal Incident-Date Calculator"]
+        JurisprudenceFeed ["Transitional Jurisprudence Feed"]
+        LegalEditorPill ["LegalEditor Article 20(1) Safeguard Pill & Auto-Fixer"]
+    end
+
+    subgraph APILayer ["FastAPI Gateway (/api/transition/*)"]
+        RouteDiff ["GET /diff/{pair_id}"]
+        RouteInspect ["POST /inspect-temporal"]
+        RouteJurisprudence ["GET /transitional-jurisprudence"]
+        RouteConcordance ["GET /concordance (Enhanced)"]
+    end
+
+    subgraph ServiceLayer ["Backend Core Services"]
+        TemporalService ["TemporalSafeguardService (Rule Engine)"]
+        DiffService ["StatutoryDiffEngine (difflib Myers + Word Tokenizer)"]
+        JurisprudenceService ["TransitionalJurisprudenceService"]
+        ConcordanceDB ["Concordance & Verbatim Statutory Store (150+ Key Sections)"]
+    end
+
+    TransitionPage --> DiffViewer
+    TransitionPage --> TemporalInspector
+    TransitionPage --> JurisprudenceFeed
+    LegalEditorPill --> RouteInspect
+
+    DiffViewer --> RouteDiff
+    TemporalInspector --> RouteInspect
+    JurisprudenceFeed --> RouteJurisprudence
+
+    RouteDiff --> DiffService
+    RouteInspect --> TemporalService
+    RouteJurisprudence --> JurisprudenceService
+
+    DiffService --> ConcordanceDB
+    TemporalService --> ConcordanceDB
+    JurisprudenceService --> ConcordanceDB
+```
+
+---
+
+## 2. Component Specifications
+
+### 2.1 Automated Temporal Incident-Date Safeguard Engine (Article 20(1) Enforcement)
+
+#### Constitutional Logic Enforced:
+* **Pre-July 1, 2024 Offences**: Substantive criminal liability **must strictly remain under the IPC 1860**. Applying BNS 2023 penal provisions retrospectively is an unconstitutional violation of **Article 20(1)** (*ex post facto law*).
+* **Post-July 1, 2024 Offences**: Substantive criminal liability **must strictly be under BNS 2023**.
+* **Hybrid Procedural Rule**: If an offence was committed before July 1, 2024, but the FIR, investigation, or trial is initiated on or after July 1, 2024:
+  * **Substantive Law**: IPC 1860 (penal sections, compounding under 320 CrPC principles).
+  * **Procedural Law**: BNSS 2023 (applies to prospective procedural steps, e.g., bail under Section 480/482/483 BNSS, subject to vested rights saved under Section 531(2)(a) BNSS).
+  * **Evidentiary Law**: BSA 2023 vs Section 65B IEA depending on the creation and certificate generation timeline.
+
+#### Engine Capabilities:
+* **Date Parsing & Entity Extraction**: Detects date of occurrence/incident, date of complaint/FIR, and cited statutory provisions using high-precision regex + dateparser.
+* **Violation Diagnostics**:
+  1. `EX_POST_FACTO_PENAL_VIOLATION`: BNS section cited for pre-July 1, 2024 incident.
+  2. `REPEALED_SUBSTANTIVE_LAW_CITED`: IPC section cited for post-July 1, 2024 incident.
+  3. `PROCEDURAL_CONTINUITY_MISMATCH`: Pending proceeding initiated prior to cutoff citing post-cutoff procedures without invoking Section 531 BNSS savings clause.
+* **Auto-Correction Payload**: Returns a clean replacement dictionary mapping defective sections to their legally required counterparts.
+
+### 2.2 Verbatim Statutory Side-by-Side Diff Engine
+
+#### Word-by-Word Diff Algorithm:
+* Extracts the verbatim statutory text of legacy provisions (IPC/CrPC/IEA) and 2023 enactments (BNS/BNSS/BSA).
+* Uses word-level sequence matching (`difflib.SequenceMatcher`) to compute exact lexical differences.
+* Renders:
+  * <span style="background-color: rgba(239, 68, 68, 0.2); color: #ef4444; text-decoration: line-through; padding: 2px 4px; border-radius: 4px;">Red Strikethrough</span>: Archaic colonial terminology, repealed phrases, deleted exceptions, or altered timeframes.
+  * <span style="background-color: rgba(34, 197, 94, 0.2); color: #22c55e; font-weight: 600; padding: 2px 4px; border-radius: 4px;">Green Highlight</span>: Newly inserted words, modern mandatory obligations (e.g., electronic recording, forensic requirements), new penalties.
+  * **Unchanged Text**: Retained in neutral Bookman/Inter serif typography showing *pari materia* continuity.
+
+#### Procedural & Penal Metadata Delta:
+For each compared section, displays a side-by-side comparison table:
+| Parameter | Legacy Code (IPC / CrPC) | New Enactment (BNS / BNSS) | Litigator Impact |
+| :--- | :--- | :--- | :--- |
+| **Section Number** | Section 438 CrPC | Section 482 BNSS | Registry citation update |
+| **Bailability** | Non-Bailable | Non-Bailable | Identical |
+| **Triable By** | Court of Session / High Court | Court of Session / High Court | Retained |
+| **Procedural Shift** | Discretionary conditions | Mandatory conditions + Notice to PP | Stricter notice requirement |
+| **Sentencing Range** | Discretionary pre-arrest bail | Discretionary pre-arrest bail | Doctrine of Sibbia preserved |
+
+### 2.3 Transitional Jurisprudence Live Feed
+
+Curates and serves authoritative judicial rulings that interpret the transition interface:
+* **Section 479 BNSS Undertrial Bail (Retrospective)**:
+  * *Supreme Court of India* in *Re: Inhuman Conditions in 548 Prisons* — Held that the beneficial provision of Section 479 BNSS (bail for first-time offenders who have served 1/3rd sentence) applies retrospectively to pending undertrials.
+* **Section 187 BNSS Police Custody Beyond 15 Days**:
+  * Judicial divergence between High Courts on whether the 15-day custody can be taken in broken periods across the first 40 or 60 days.
+* **Section 173(3) BNSS Preliminary Inquiry**:
+  * Mandating 14-day inquiry for offences punishable between 3 to 7 years before FIR registration (*Lalita Kumari* doctrine modified).
+* **Section 531 BNSS Savings Clause**:
+  * Punjab & Haryana High Court and Delhi High Court decisions on maintainability of Section 482 CrPC quashing petitions filed after July 1, 2024 for pre-enactment FIRs.
+
+Each feed item provides:
+* Case Title, Official Citation, Bench, Decision Date
+* Core Holding on Era Transition
+* Court Pleading Paragraph ready for copy-pasting into bail/quashing petitions citing **Section 8 General Clauses Act**.
+
+---
+
+## 3. Implementation Steps & File Modifications
+
+### Phase 1: Backend Schemas & Data Layer
+1. **`backend/app/schemas/era_transition.py`**:
+   * Add `TemporalInspectionRequest`, `TemporalInspectionResponse`, `TemporalViolationItem`, and `AutoRemedyItem`.
+   * Add `StatutoryVerbatimDiffRequest`, `StatutoryVerbatimDiffResponse`, `WordDiffChunk`, and `MetadataDelta`.
+   * Add `TransitionalJurisprudenceItem`, `TransitionalJurisprudenceResponse`.
+2. **`backend/app/data/statutory_verbatim_db.py`**:
+   * Curate verbatim statutory texts and metadata for the top 50+ critical criminal sections (Bail, Quashing, FIR, Arrest, Search & Seizure, Cheating, Murder, Rape, Electronic Evidence).
+3. **`backend/app/data/transitional_jurisprudence_db.py`**:
+   * Store high-impact landmark rulings on CrPC/BNSS transition issues.
+
+### Phase 2: Backend Core Services & API Routes
+1. **`backend/app/services/temporal_safeguard_service.py`**:
+   * Implement date parsing, incident-date evaluation, Article 20(1) validation, and statutory substitution generator.
+2. **`backend/app/services/statutory_diff_service.py`**:
+   * Implement tokenized word-level Myers diffing with red/green classification and metadata delta compilation.
+3. **`backend/app/api/era_transition.py`**:
+   * Add endpoints:
+     * `POST /api/transition/inspect-temporal`
+     * `GET /api/transition/verbatim-diff/{pair_id}`
+     * `GET /api/transition/jurisprudence`
+     * `POST /api/transition/batch-diff`
+
+### Phase 3: Frontend UI/UX Components
+1. **`frontend/src/types/era_transition.ts`**:
+   * Update TypeScript definitions matching Pydantic schemas.
+2. **`frontend/src/services/eraTransition.ts`**:
+   * Add API methods for temporal inspection, verbatim diffs, and transitional jurisprudence.
+3. **`frontend/src/components/research/VerbatimStatutoryDiffModal.tsx` & Inline View**:
+   * Split-pane or unified diff viewer with red/green highlights, metadata badges, and copyable court submission clauses.
+4. **`frontend/src/components/research/TemporalSafeguardWidget.tsx`**:
+   * Interactive calculator with date pickers, visual timeline, Article 20(1) warning cards, and instant code mapping.
+5. **`frontend/src/components/research/TransitionalJurisprudenceFeed.tsx`**:
+   * Filterable cards with judicial holding tags, bench strengths, and copy citation buttons.
+6. **`frontend/src/components/research/EraTransitionExplorer.tsx`**:
+   * Upgrade tabs: Matrix ↔ Verbatim Diff ↔ Temporal Calculator ↔ Jurisprudence Feed ↔ Q&A.
+7. **`frontend/src/components/document/LegalEditor.tsx`**:
+   * Integrate live temporal background check: detects dates and citations in the document, displaying a non-intrusive amber chip when an Article 20(1) mismatch is found with a 1-click "Fix Sections" action.
+
+---
+
+## 4. Verification & Testing Protocol
+
+1. **Unit & Integration Tests**:
+   * Test pre-July 1, 2024 incident with BNS section $\rightarrow$ Verify `EX_POST_FACTO_PENAL_VIOLATION` triggered.
+   * Test post-July 1, 2024 incident with IPC section $\rightarrow$ Verify `REPEALED_SUBSTANTIVE_LAW_CITED` triggered.
+   * Test hybrid incident (Offence June 15, 2024, FIR July 10, 2024) $\rightarrow$ Verify Substantive = IPC, Procedure = BNSS.
+   * Test verbatim diff between Section 438 CrPC and Section 482 BNSS $\rightarrow$ Verify deleted vs added words correctly tagged.
+   * Test transitional jurisprudence query on "Section 479" $\rightarrow$ Verify *Re: Inhuman Conditions* returned.
+2. **Frontend Build Verification**:
+   * Run `npm run build` to confirm 0 TypeScript / compilation errors.
+3. **Interactive Verification in Browser**:
+   * Test the `/transition` page UI tabs and verify the interactive diff and temporal inspector.
+
+
+
+
+
+
+
+
+
+

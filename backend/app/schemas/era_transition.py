@@ -129,3 +129,134 @@ class TransitionQuestionResponse(BaseModel):
     draft_pleading_snippet: str | None = Field(default=None, description="Court-ready pleading paragraph for application/petition")
     confidence: float = Field(default=0.95, description="Confidence score of statutory concordance")
 
+
+# ── Pillar 4: Temporal Safeguard & Verbatim Diff Schemas ──
+
+class TemporalViolationItem(BaseModel):
+    """Specific statutory or constitutional violation identified."""
+    violation_code: Literal[
+        "EX_POST_FACTO_PENAL_VIOLATION",
+        "REPEALED_SUBSTANTIVE_LAW_CITED",
+        "PROCEDURAL_CONTINUITY_MISMATCH",
+        "EVIDENTIARY_CERTIFICATE_AMBIGUITY",
+    ]
+    title: str = Field(..., description="Short title of the violation")
+    description: str = Field(..., description="Detailed explanation grounded in Article 20(1) or Section 531 BNSS")
+    problematic_citation: str = Field(..., description="Cited section that triggers this violation")
+    correct_statutory_reference: str = Field(..., description="Constitutionally and procedurally valid section")
+    severity: Literal["CRITICAL", "HIGH", "WARNING"] = "CRITICAL"
+
+
+class AutoRemedyItem(BaseModel):
+    """Automated section replacement instruction."""
+    original_text: str = Field(..., description="Defective section string in draft, e.g. 'Section 318(4) BNS'")
+    replacement_text: str = Field(..., description="Correct section string, e.g. 'Section 420 IPC'")
+    statute_type: Literal["SUBSTANTIVE", "PROCEDURAL", "EVIDENTIARY"]
+    rationale: str = Field(..., description="Reason for replacement (Article 20(1) / Section 531 BNSS)")
+
+
+class TemporalInspectionRequest(BaseModel):
+    """Request payload to inspect incident/FIR dates against July 1, 2024 cutoff."""
+    incident_date: str = Field(..., description="Date of alleged offence (YYYY-MM-DD or textual date)")
+    fir_date: str | None = Field(default=None, description="Date of FIR registration or complaint filing")
+    draft_text_or_sections: str | None = Field(
+        default=None,
+        description="Draft petition text or comma-separated list of cited sections to audit"
+    )
+    case_type: Literal["Bail", "Quashing", "Trial", "Appeal", "Demand Notice", "General"] = "General"
+
+
+class TemporalInspectionResponse(BaseModel):
+    """Constitutional Article 20(1) and BNSS procedural audit verdict."""
+    incident_date_resolved: str = Field(..., description="Normalized incident date")
+    fir_date_resolved: str | None = Field(None, description="Normalized FIR date")
+    is_pre_cutoff_incident: bool = Field(
+        ..., description="True if offence was committed prior to July 1, 2024"
+    )
+    is_pre_cutoff_fir: bool = Field(
+        ..., description="True if FIR was registered prior to July 1, 2024"
+    )
+    statutory_regime: Literal["PURE_LEGACY_IPC", "HYBRID_TRANSITION_ERA", "PURE_NEW_BNS"] = Field(
+        ..., description="Constitutional regime classification"
+    )
+    substantive_code_required: Literal["IPC", "BNS"] = Field(
+        ..., description="Mandatory penal code under Article 20(1)"
+    )
+    procedural_code_required: Literal["CrPC", "BNSS"] = Field(
+        ..., description="Governing procedural code under Section 531 BNSS"
+    )
+    evidence_act_required: Literal["IEA", "BSA"] = Field(
+        ..., description="Applicable evidentiary code"
+    )
+    constitutional_assessment: str = Field(..., description="Authoritative legal finding")
+    violations: list[TemporalViolationItem] = Field(default_factory=list)
+    remedies: list[AutoRemedyItem] = Field(default_factory=list)
+    court_declaration_snippet: str = Field(
+        ..., description="Court-ready preliminary objection or submission asserting applicable era"
+    )
+
+
+class WordDiffChunk(BaseModel):
+    """A single tokenized chunk in the statutory diff."""
+    text: str
+    type: Literal["unchanged", "added", "deleted"]
+
+
+class MetadataDelta(BaseModel):
+    """Comparative legal parameter between old and new section."""
+    parameter: str = Field(..., description="e.g., Bailability, Cognizability, Maximum Sentence")
+    old_value: str
+    new_value: str
+    has_changed: bool
+    advocate_impact: str
+
+
+class StatutoryVerbatimDiffRequest(BaseModel):
+    """Request payload for verbatim statutory diff."""
+    pair_id: str = Field(..., description="Concordance pair identifier, e.g. 'crpc_438_bnss_482'")
+    old_code: str | None = None
+    old_section: str | None = None
+    new_code: str | None = None
+    new_section: str | None = None
+
+
+class StatutoryVerbatimDiffResponse(BaseModel):
+    """Complete word-level statutory diff and litigator delta."""
+    pair_id: str
+    old_title_full: str
+    new_title_full: str
+    old_verbatim_text: str
+    new_verbatim_text: str
+    diff_chunks: list[WordDiffChunk]
+    metadata_deltas: list[MetadataDelta]
+    key_litigator_takeaways: list[str]
+    court_submission_pleading: str
+
+
+class TransitionalJurisprudenceItem(BaseModel):
+    """Landmark ruling resolving criminal transition ambiguities."""
+    id: str
+    case_title: str
+    citation: str
+    court: str
+    bench_coram: str
+    decision_date: str
+    topic_category: Literal[
+        "Undertrial Bail (BNSS 479)",
+        "Police Custody (BNSS 187)",
+        "Preliminary Inquiry (BNSS 173)",
+        "Mandatory Videography (BNSS 105)",
+        "Savings & Pending Petitions (BNSS 531)",
+        "Electronic Evidence (BSA 63)",
+        "General Clauses Continuity",
+    ]
+    core_holding: str
+    strategic_ratio_quote: str
+    court_pleading_snippet: str
+    source_url: str | None = None
+
+
+class TransitionalJurisprudenceResponse(BaseModel):
+    """List of transitional jurisprudence authorities with topic filters."""
+    total_count: int
+    items: list[TransitionalJurisprudenceItem]
