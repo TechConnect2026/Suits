@@ -13,6 +13,9 @@ import {
   ShieldAlert,
   Gavel,
   BookOpen,
+  ChevronRight,
+  Layers,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { draftingService } from "@/services/drafting";
@@ -162,7 +165,7 @@ export const DraftingTemplateModal: React.FC<DraftingTemplateModalProps> = ({
   return createPortal(
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div
-        className="w-full max-w-4xl h-[90vh] rounded-2xl flex flex-col overflow-hidden border shadow-2xl"
+        className="w-full max-w-5xl h-[90vh] rounded-2xl flex flex-col overflow-hidden border shadow-2xl"
         style={{
           borderColor: "var(--hairline)",
           background: "var(--surface)",
@@ -191,32 +194,55 @@ export const DraftingTemplateModal: React.FC<DraftingTemplateModalProps> = ({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Step Indicators */}
-            <div className="hidden sm:flex items-center gap-1.5 text-xs font-mono mr-2">
-              <span
-                className={`px-2 py-0.5 rounded-full ${
-                  step === 1 ? "bg-[var(--brass)] text-[var(--on-primary)] font-bold" : "text-[var(--ink-faint)]"
-                }`}
-              >
-                1. Template
-              </span>
-              <span className="text-[var(--ink-faint)]">→</span>
-              <span
-                className={`px-2 py-0.5 rounded-full ${
-                  step === 2 ? "bg-[var(--brass)] text-[var(--on-primary)] font-bold" : "text-[var(--ink-faint)]"
-                }`}
-              >
-                2. Case Particulars
-              </span>
-              <span className="text-[var(--ink-faint)]">→</span>
-              <span
-                className={`px-2 py-0.5 rounded-full ${
-                  step === 3 ? "bg-[var(--brass)] text-[var(--on-primary)] font-bold" : "text-[var(--ink-faint)]"
-                }`}
-              >
-                3. Verification
-              </span>
-            </div>
+            {/* Stepper Progress Bar */}
+            <nav aria-label="Drafting Progress" className="hidden sm:flex items-center gap-1.5 p-1 rounded-xl border border-[var(--hairline)] bg-[var(--surface-container)]">
+              {[
+                { num: 1, label: "Template" },
+                { num: 2, label: "Case Particulars" },
+                { num: 3, label: "Verification" },
+              ].map((s, idx) => {
+                const isActive = step === s.num;
+                const isCompleted = step > s.num;
+                const isClickable = isCompleted;
+
+                return (
+                  <React.Fragment key={s.num}>
+                    {idx > 0 && (
+                      <ChevronRight size={11} className="text-[var(--ink-faint)] opacity-40 shrink-0 mx-0.5" />
+                    )}
+                    <button
+                      type="button"
+                      disabled={!isClickable}
+                      onClick={() => {
+                        if (isClickable) setStep(s.num as any);
+                      }}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all duration-150 ${
+                        isClickable ? "cursor-pointer hover:bg-[var(--surface-raised)]" : "cursor-default"
+                      } ${
+                        isActive
+                          ? "bg-[var(--surface-raised)] text-[var(--brass-bright)] border border-[var(--brass-soft)] shadow-xs font-semibold"
+                          : isCompleted
+                          ? "text-[var(--ink)] hover:text-[var(--brass)]"
+                          : "text-[var(--ink-faint)] opacity-60"
+                      }`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-mono font-bold shrink-0 transition-colors ${
+                          isActive
+                            ? "bg-[var(--brass)] text-[var(--on-primary)] shadow-xs"
+                            : isCompleted
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                            : "bg-[var(--surface-container-high)] text-[var(--ink-faint)] border border-[var(--hairline)]"
+                        }`}
+                      >
+                        {isCompleted ? <Check size={9} strokeWidth={3} /> : s.num}
+                      </span>
+                      <span className="tracking-tight whitespace-nowrap">{s.label}</span>
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </nav>
 
             <button
               onClick={onClose}
@@ -232,26 +258,71 @@ export const DraftingTemplateModal: React.FC<DraftingTemplateModalProps> = ({
           {/* STEP 1: TEMPLATE SELECTOR */}
           {step === 1 && (
             <div className="space-y-5">
-              {/* Category Pills */}
-              <div className="flex items-center gap-2 p-1 rounded-xl border border-[var(--hairline)] bg-[var(--surface-raised)] w-fit">
-                {[
-                  { id: "all", label: "All Formats" },
-                  { id: "criminal", label: "Criminal (BNS / CrPC)" },
-                  { id: "constitutional", label: "Constitutional (Writs / SLP)" },
-                  { id: "civil", label: "Civil & Commercial (CPC)" },
-                ].map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id as any)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                      selectedCategory === cat.id
-                        ? "bg-[var(--brass)] text-[var(--on-primary)] shadow-sm font-semibold"
-                        : "text-[var(--ink-faint)] hover:text-[var(--ink)]"
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
+              {/* Category Pills Bar (Strictly Single Line) */}
+              <div className="flex items-center pb-1 border-b border-[var(--hairline-soft)]">
+                <div className="flex items-center gap-1.5 p-1 rounded-xl border border-[var(--hairline)] bg-[var(--surface-raised)] shadow-xs flex-nowrap overflow-x-auto no-scrollbar">
+                  {[
+                    {
+                      id: "all" as const,
+                      label: "All Formats",
+                      icon: Layers,
+                      count: templates.length,
+                    },
+                    {
+                      id: "criminal" as const,
+                      label: "Criminal (BNS / CrPC)",
+                      icon: ShieldAlert,
+                      count: templates.filter((t) => t.category === "criminal").length,
+                    },
+                    {
+                      id: "constitutional" as const,
+                      label: "Constitutional (Writs / SLP)",
+                      icon: Scale,
+                      count: templates.filter((t) => t.category === "constitutional").length,
+                    },
+                    {
+                      id: "civil" as const,
+                      label: "Civil & Commercial (CPC)",
+                      icon: BookOpen,
+                      count: templates.filter((t) => t.category === "civil").length,
+                    },
+                  ].map((cat) => {
+                    const isSelected = selectedCategory === cat.id;
+                    const Icon = cat.icon;
+
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedCategory(cat.id)}
+                        className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 cursor-pointer shrink-0 whitespace-nowrap ${
+                          isSelected
+                            ? "bg-[var(--surface-container-high)] text-[var(--brass-bright)] border border-[var(--brass)] shadow-xs font-semibold"
+                            : "text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-[var(--surface-container)] border border-transparent"
+                        }`}
+                      >
+                        <Icon
+                          size={13}
+                          className={`transition-colors shrink-0 ${
+                            isSelected ? "text-[var(--brass)]" : "text-[var(--ink-faint)] group-hover:text-[var(--ink)]"
+                          }`}
+                        />
+                        <span className="whitespace-nowrap">{cat.label}</span>
+                        {cat.count > 0 && (
+                          <span
+                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono transition-colors shrink-0 ${
+                              isSelected
+                                ? "bg-[var(--brass-soft)] text-[var(--brass-bright)] font-bold border border-[var(--brass-soft)]"
+                                : "bg-[var(--surface-container)] text-[var(--ink-faint)] group-hover:text-[var(--ink)]"
+                            }`}
+                          >
+                            {cat.count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Template Cards Grid */}
@@ -327,10 +398,12 @@ export const DraftingTemplateModal: React.FC<DraftingTemplateModalProps> = ({
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setStep(1)}
-                  className="text-xs text-[var(--brass)] hover:underline cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg border border-[var(--hairline)] hover:border-[var(--brass)] bg-[var(--surface-container)] text-xs text-[var(--brass)] font-medium transition-all hover:bg-[var(--surface-raised)] cursor-pointer flex items-center gap-1.5"
                 >
-                  Change Template
+                  <ArrowLeft size={11} />
+                  <span>Change Template</span>
                 </button>
               </div>
 
