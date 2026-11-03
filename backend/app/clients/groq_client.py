@@ -43,7 +43,11 @@ class GroqClient:
             logger.warning("groq_api_key_missing", hint="Set GROQ_API_KEY in backend/.env")
             return False
         self._api_key = key.strip()
-        self._model = os.getenv("GROQ_MODEL", "") or settings.groq_model or "openai/gpt-oss-120b"
+        raw_model = (os.getenv("GROQ_MODEL", "") or settings.groq_model or "openai/gpt-oss-120b").strip()
+        # Normalize gpt-oss-120b to official Groq model identifier openai/gpt-oss-120b
+        if raw_model in ("gpt-oss-120b", "openai/gpt-oss-120b"):
+            raw_model = "openai/gpt-oss-120b"
+        self._model = raw_model
         self._configured = True
         return self._configured
 
