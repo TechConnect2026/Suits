@@ -386,7 +386,7 @@ async def reprocess_document(
     await db.flush()
 
     from app.core.config import settings
-    background_tasks.add_task(_run_processing, document_id, settings.database_url)
+    background_tasks.add_task(_run_processing, document_id)
     return APIResponse(
         data=DocumentUploadResponse.model_validate(doc),
         message="Reprocessing started.",

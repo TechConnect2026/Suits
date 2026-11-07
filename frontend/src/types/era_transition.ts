@@ -87,3 +87,97 @@ export interface TransitionQuestionResponse {
   confidence: number;
 }
 
+// ── Pillar 4: Temporal Safeguard & Verbatim Diff Types ──
+
+export interface TemporalViolationItem {
+  violation_code:
+    | 'EX_POST_FACTO_PENAL_VIOLATION'
+    | 'REPEALED_SUBSTANTIVE_LAW_CITED'
+    | 'PROCEDURAL_CONTINUITY_MISMATCH'
+    | 'EVIDENTIARY_CERTIFICATE_AMBIGUITY';
+  title: string;
+  description: string;
+  problematic_citation: string;
+  correct_statutory_reference: string;
+  severity: 'CRITICAL' | 'HIGH' | 'WARNING';
+}
+
+export interface AutoRemedyItem {
+  original_text: string;
+  replacement_text: string;
+  statute_type: 'SUBSTANTIVE' | 'PROCEDURAL' | 'EVIDENTIARY';
+  rationale: string;
+}
+
+export interface TemporalInspectionRequest {
+  incident_date: string;
+  fir_date?: string | null;
+  draft_text_or_sections?: string | null;
+  case_type?: 'Bail' | 'Quashing' | 'Trial' | 'Appeal' | 'Demand Notice' | 'General';
+}
+
+export interface TemporalInspectionResponse {
+  incident_date_resolved: string;
+  fir_date_resolved?: string | null;
+  is_pre_cutoff_incident: boolean;
+  is_pre_cutoff_fir: boolean;
+  statutory_regime: 'PURE_LEGACY_IPC' | 'HYBRID_TRANSITION_ERA' | 'PURE_NEW_BNS';
+  substantive_code_required: 'IPC' | 'BNS';
+  procedural_code_required: 'CrPC' | 'BNSS';
+  evidence_act_required: 'IEA' | 'BSA';
+  constitutional_assessment: string;
+  violations: TemporalViolationItem[];
+  remedies: AutoRemedyItem[];
+  court_declaration_snippet: string;
+}
+
+export interface WordDiffChunk {
+  text: string;
+  type: 'unchanged' | 'added' | 'deleted';
+}
+
+export interface MetadataDelta {
+  parameter: string;
+  old_value: string;
+  new_value: string;
+  has_changed: boolean;
+  advocate_impact: string;
+}
+
+export interface StatutoryVerbatimDiffResponse {
+  pair_id: string;
+  old_title_full: string;
+  new_title_full: string;
+  old_verbatim_text: string;
+  new_verbatim_text: string;
+  diff_chunks: WordDiffChunk[];
+  metadata_deltas: MetadataDelta[];
+  key_litigator_takeaways: string[];
+  court_submission_pleading: string;
+}
+
+export interface TransitionalJurisprudenceItem {
+  id: string;
+  case_title: string;
+  citation: string;
+  court: string;
+  bench_coram: string;
+  decision_date: string;
+  topic_category:
+    | 'Undertrial Bail (BNSS 479)'
+    | 'Police Custody (BNSS 187)'
+    | 'Preliminary Inquiry (BNSS 173)'
+    | 'Mandatory Videography (BNSS 105)'
+    | 'Savings & Pending Petitions (BNSS 531)'
+    | 'Electronic Evidence (BSA 63)'
+    | 'General Clauses Continuity';
+  core_holding: string;
+  strategic_ratio_quote: string;
+  court_pleading_snippet: string;
+  source_url?: string | null;
+}
+
+export interface TransitionalJurisprudenceResponse {
+  total_count: number;
+  items: TransitionalJurisprudenceItem[];
+}

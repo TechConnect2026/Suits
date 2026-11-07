@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { LegalEditor } from "@/components/document/LegalEditor";
 import { DocumentChatDrawer } from "@/components/document/DocumentChatDrawer";
 import { CounterPleadingModal } from "@/components/defense/CounterPleadingModal";
+import { DraftingTemplateModal } from "@/components/document/DraftingTemplateModal";
+import { AdversarialStrategyModal } from "@/components/defense/AdversarialStrategyModal";
 import {
   FileText,
   Plus,
@@ -12,6 +14,8 @@ import {
   ChevronRight,
   BookOpen,
   ShieldAlert,
+  Gavel,
+  Swords,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -127,6 +131,8 @@ export default function DocumentPage() {
   const [showDraftsDrawer, setShowDraftsDrawer] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDefenseModal, setShowDefenseModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showAdversarialModal, setShowAdversarialModal] = useState(false);
 
   const activeDraft = drafts.find((d) => d.id === activeDraftId) || drafts[0];
 
@@ -138,6 +144,25 @@ export default function DocumentPage() {
       // storage quota or error
     }
   }, [drafts]);
+
+  // Listen for external draft creations/updates (e.g. from /chat or Drawer)
+  useEffect(() => {
+    const handleDraftsUpdated = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setDrafts(parsed);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener("suits:drafts-updated", handleDraftsUpdated);
+    return () => window.removeEventListener("suits:drafts-updated", handleDraftsUpdated);
+  }, []);
 
   const handleContentSave = (newContent: string) => {
     setDrafts((prev) =>
@@ -187,6 +212,18 @@ export default function DocumentPage() {
     setActiveDraftId(newId);
   };
 
+  const handleOpenTemplateDraft = (newDraft: { title: string; content: string }) => {
+    const newId = `draft-${Date.now()}`;
+    const draftItem: DraftItem = {
+      id: newId,
+      title: newDraft.title,
+      content: newDraft.content,
+      updatedAt: new Date().toISOString(),
+    };
+    setDrafts((prev) => [draftItem, ...prev]);
+    setActiveDraftId(newId);
+  };
+
   const handleDeleteDraft = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (drafts.length <= 1) {
@@ -221,7 +258,7 @@ export default function DocumentPage() {
     <div className="dashboard-layout pb-24" style={{ maxWidth: "100%", width: "100%", marginTop: 36 }}>
       {/* ── Page Header / Sub-navigation ── */}
       <div className="flex items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={() => setShowDraftsDrawer(!showDraftsDrawer)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
@@ -239,7 +276,7 @@ export default function DocumentPage() {
 
           <button
             onClick={handleCreateNewDraft}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
@@ -251,16 +288,44 @@ export default function DocumentPage() {
           </button>
 
           <button
-            onClick={() => setShowDefenseModal(true)}
+            onClick={() => setShowTemplateModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
               border: "1px solid var(--hairline)",
             }}
+            title="Generate procedural Indian court pleading (Bail, Writs, S.138, Plaint, Vakalatnama)"
+          >
+            <Gavel size={14} />
+            <span>Court Templates</span>
+          </button>
+
+          <button
+            onClick={() => setShowAdversarialModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer hover:opacity-90 active:scale-95"
+            style={{
+              background: "var(--brass-soft)",
+              color: "var(--brass-bright)",
+              border: "1px solid var(--brass)",
+            }}
+            title="Strategic Adversarial War Room: 4-Column Opposition Matrix, Stay Analyzer & Weakness Radar"
+          >
+            <Swords size={14} />
+            <span>Adversarial War Room</span>
+          </button>
+
+          <button
+            onClick={() => setShowDefenseModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
+            style={{
+              background: "var(--surface-container)",
+              color: "var(--ink)",
+              border: "1px solid var(--hairline)",
+            }}
             title="Synthesize court-ready Written Statement under Order VIII CPC"
           >
-            <ShieldAlert size={14} />
+            <ShieldAlert size={14} style={{ color: "var(--brass)" }} />
             <span>Draft Defense / WS</span>
           </button>
         </div>
@@ -275,19 +340,21 @@ export default function DocumentPage() {
             borderColor: "var(--hairline)",
           }}
         >
-          <div className="flex items-center justify-between text-xs text-muted-foreground pb-2 border-b border-border/40">
-            <span className="font-mono uppercase tracking-wider text-[11px]">Saved Legal Pleadings & Petitions</span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              Stored Document Drafts ({drafts.length})
+            </span>
             <button
-              onClick={handleCreateNewDraft}
-              className="text-primary hover:underline flex items-center gap-1 text-xs font-medium"
+              onClick={() => setShowDraftsDrawer(false)}
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
-              <Plus size={12} /> New Blank Document
+              Close
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-60 overflow-y-auto">
             {drafts.map((d) => {
-              const isActive = d.id === activeDraftId;
+              const isSelected = d.id === activeDraftId;
               return (
                 <div
                   key={d.id}
@@ -295,29 +362,24 @@ export default function DocumentPage() {
                     setActiveDraftId(d.id);
                     setShowDraftsDrawer(false);
                   }}
-                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
-                    isActive ? "ring-1 ring-primary" : "hover:border-border"
+                  className={`p-3 rounded-lg border text-left cursor-pointer transition-all ${
+                    isSelected
+                      ? "border-primary bg-primary/10 shadow-sm"
+                      : "border-border/40 hover:border-border hover:bg-muted/30"
                   }`}
-                  style={{
-                    background: isActive ? "var(--brass-soft)" : "var(--surface-container)",
-                    borderColor: isActive ? "var(--brass)" : "var(--hairline-soft)",
-                  }}
                 >
-                  <div className="space-y-1 min-w-0">
-                    <span
-                      className="text-xs font-semibold line-clamp-1 block"
-                      style={{ color: "var(--ink)" }}
-                    >
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <span className="text-xs font-semibold line-clamp-1 flex-1">
                       {d.title}
                     </span>
-                    <span
-                      className="text-[10px] text-muted-foreground font-mono flex items-center gap-1"
-                    >
-                      <Clock size={10} />
-                      {new Date(d.updatedAt).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
+                    {isSelected && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-2">
+                    <span className="flex items-center gap-1">
+                      <Clock size={11} />
+                      {new Date(d.updatedAt).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
@@ -358,6 +420,7 @@ export default function DocumentPage() {
           lastSavedAt={lastSavedAt}
           isFullscreen={isFullscreen}
           onFullscreenChange={setIsFullscreen}
+          onOpenAdversarial={() => setShowAdversarialModal(true)}
         />
       )}
 
@@ -367,11 +430,27 @@ export default function DocumentPage() {
         isFullscreen={isFullscreen}
       />
 
+      {/* ── Procedural Court Drafting Templates Modal (Pillar 1) ── */}
+      <DraftingTemplateModal
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        onOpenInEditor={handleOpenTemplateDraft}
+      />
+
       {/* ── Adversarial Defense Engine Modal (Order VIII CPC) ── */}
       <CounterPleadingModal
         isOpen={showDefenseModal}
         onClose={() => setShowDefenseModal(false)}
         onOpenInEditor={handleOpenDefenseDraft}
+      />
+
+      {/* ── Strategic Adversarial War Room Modal (Pillar 2) ── */}
+      <AdversarialStrategyModal
+        isOpen={showAdversarialModal}
+        onClose={() => setShowAdversarialModal(false)}
+        activeDraftTitle={activeDraft?.title}
+        activeDraftContent={activeDraft?.content}
+        onInjectContent={(html) => handleContentSave(activeDraft.content + html)}
       />
     </div>
   );

@@ -26,8 +26,11 @@ import {
   CheckCircle2,
   Plus,
   Scissors,
+  Swords,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AlertCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { draftingService } from "@/services/drafting";
 
 interface LegalEditorProps {
   initialContent?: string;
@@ -37,6 +40,7 @@ interface LegalEditorProps {
   lastSavedAt?: Date | null;
   isFullscreen?: boolean;
   onFullscreenChange?: (isFullscreen: boolean) => void;
+  onOpenAdversarial?: () => void;
 }
 
 const FONTS = [
@@ -78,6 +82,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
   lastSavedAt,
   isFullscreen: controlledFullscreen,
   onFullscreenChange,
+  onOpenAdversarial,
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,6 +118,97 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
   const [wordCount, setWordCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
   const [isCopied, setIsCopied] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState(false);
+  const [deficitCount, setDeficitCount] = useState(0);
+  const [temporalWarning, setTemporalWarning] = useState<{
+    hasViolation: boolean;
+    remedies: { original: string; replacement: string }[];
+  } | null>(null);
+
+  // Recalculate deficit count & audit Article 20(1) temporal compliance
+  useEffect(() => {
+    const full = pages.join(" ");
+    const matches = full.match(/\[(?:REQUIRED|CRITICAL(?:\s+MISSING\s+FACT)?|MISSING\s+VARIABLE)[:\s]+[^\]]+\]/gi);
+    setDeficitCount(matches ? matches.length : 0);
+
+    // Article 20(1) Temporal Check: Pre-July 1, 2024 dates with BNS penal sections
+    const preCutoffDatePattern = /\b(201\d|202[0-3]|(?:jan|feb|mar|apr|may|jun)[a-z]*\s+2024|0[1-9]\/0[1-6]\/2024|\d{4}-0[1-6]-\d{2})\b/i;
+    const hasPreCutoffDate = preCutoffDatePattern.test(full);
+
+    const bnsMatch = full.match(/\b(?:section|sec\.?|u\/s|s\.)\s*(318\(4\)|318|316|103|106|64|85|86|115\(2\)|61\(2\))\s*(?:of\s+)?(?:the\s+)?(?:bns|bharatiya nyaya sanhita)?\b/i);
+
+    if (hasPreCutoffDate && bnsMatch) {
+      const cited = bnsMatch[0];
+      const secNum = bnsMatch[1];
+      let rep = "Section 420 IPC";
+      if (secNum.startsWith("318")) rep = "Section 420 IPC";
+      else if (secNum === "316") rep = "Section 406 IPC";
+      else if (secNum === "103") rep = "Section 302 IPC";
+      else if (secNum === "106") rep = "Section 304A IPC";
+      else if (secNum === "64") rep = "Section 376 IPC";
+      else if (secNum.startsWith("85") || secNum.startsWith("86")) rep = "Section 498A IPC";
+      else if (secNum.startsWith("61")) rep = "Section 120B IPC";
+
+      setTemporalWarning({
+        hasViolation: true,
+        remedies: [{ original: cited, replacement: rep }],
+      });
+    } else {
+      setTemporalWarning(null);
+    }
+  }, [pages]);
+
+  const handleFixTemporalViolations = () => {
+    if (!temporalWarning || temporalWarning.remedies.length === 0) return;
+    const updated = pages.map((pageHtml) => {
+      let modified = pageHtml;
+      temporalWarning.remedies.forEach(({ original, replacement }) => {
+        const regex = new RegExp(original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+        modified = modified.replace(regex, replacement);
+      });
+      return modified;
+    });
+    setPages(updated);
+    toast.success("Article 20(1) Safeguard Applied: Replaced BNS sections with constitutionally valid IPC sections.");
+  };
+
+  const handleScrollToNextDeficit = () => {
+    for (let i = 0; i < pages.length; i++) {
+      const el = pageRefs.current[i];
+      if (el) {
+        const chip = el.querySelector(".court-deficit-chip");
+        if (chip) {
+          setActivePageIndex(i);
+          chip.scrollIntoView({ behavior: "smooth", block: "center" });
+          (chip as HTMLElement).focus();
+          toast.info("Showing missing court variable");
+          return;
+        }
+      }
+    }
+    toast.success("All required court variables are filled!");
+  };
+
+  const handleEditorSheetClick = (e: React.MouseEvent, pageIndex: number) => {
+    setActivePageIndex(pageIndex);
+    const target = e.target as HTMLElement;
+    const deficitChip = target.closest(".court-deficit-chip");
+    if (deficitChip) {
+      e.preventDefault();
+      e.stopPropagation();
+      const placeholder = deficitChip.getAttribute("data-placeholder") || deficitChip.textContent || "";
+      const label = placeholder
+        .replace(/^\[(?:REQUIRED|CRITICAL(?:\s+MISSING\s+FACT)?|MISSING\s+VARIABLE)[:\s]+/i, "")
+        .replace(/\]$/, "")
+        .trim();
+      const newVal = window.prompt(`Fill Court Variable:\n\n${label}`, "");
+      if (newVal !== null && newVal.trim() !== "") {
+        deficitChip.replaceWith(document.createTextNode(newVal.trim()));
+        handlePageInput(pageIndex);
+        toast.success(`Updated "${label}"`);
+      }
+    }
+  };
 
   // Custom Dropdown states
   const [showInserts, setShowInserts] = useState(false);
@@ -338,6 +434,20 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
     setShowInserts(false);
     handlePageInput(activePageIndex);
   };
+
+  // ─── LISTEN FOR EXTERNAL EXPORTS (FROM AI CHATBOT OR DRAWER) ──────────────
+  useEffect(() => {
+    const handleInsertEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ html?: string; text?: string }>;
+      if (customEvent.detail?.html) {
+        insertCourtBlock(customEvent.detail.html);
+      }
+    };
+    window.addEventListener("suits:insert-into-draft", handleInsertEvent);
+    return () => {
+      window.removeEventListener("suits:insert-into-draft", handleInsertEvent);
+    };
+  }, [activePageIndex]);
 
   // ─── TYPOGRAPHY CHANGE HANDLERS ──────────────────────────────────────────
   const handleFontChange = (fontId: string) => {
@@ -698,7 +808,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
     }, 350);
   };
 
-  const handleDownloadDoc = () => {
+  const handleLegacyDownloadDoc = () => {
     const content = pages
       .map((_, i) => pageRefs.current[i]?.innerHTML || pages[i] || "")
       .join('<br clear="all" style="page-break-before:always; mso-break-type:section-break" />');
@@ -708,28 +818,14 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
         <meta charset='utf-8'>
         <title>${documentTitle}</title>
         <style>
-          @page {
-            size: A4;
-            margin: 1.0in;
-            mso-header-margin: 0.5in;
-            mso-footer-margin: 0.5in;
-          }
-          body {
-            font-family: 'Bookman Old Style', 'Times New Roman', serif;
-            font-size: ${selectedSize};
-            line-height: ${selectedSpacing};
-            text-align: justify;
-          }
+          @page { size: A4; margin: 1.75in 1.0in 1.0in 1.5in; }
+          body { font-family: 'Bookman Old Style', serif; font-size: 13.5pt; line-height: 1.5; text-align: justify; }
         </style>
       </head>
-      <body>
-        ${content}
-      </body>
+      <body>${content}</body>
       </html>
     `;
-    const blob = new Blob(["\ufeff", header], {
-      type: "application/msword",
-    });
+    const blob = new Blob(["\ufeff", header], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -738,7 +834,41 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success("Downloaded court-formatted Word document (.doc)");
+  };
+
+  const handleDownloadDoc = async () => {
+    const content = pages
+      .map((_, i) => pageRefs.current[i]?.innerHTML || pages[i] || "")
+      .join('<div class="court-page-break" style="page-break-after: always;"></div>');
+
+    if (!content || !content.trim()) {
+      toast.error("Document is empty.");
+      return;
+    }
+
+    setExportingDocx(true);
+    toast.info("Compiling registry paper-book (.docx)...");
+
+    try {
+      await draftingService.exportDocx({
+        html_content: content,
+        document_title: documentTitle || "Court_Paper_Book",
+        font_family: selectedFont.includes("Times") ? "Times New Roman" : "Bookman Old Style",
+        font_size_pt: parseFloat(selectedSize) || 13.5,
+        line_spacing: parseFloat(selectedSpacing) || 1.5,
+        left_margin_inches: 1.75, // Registry binding gutter
+        top_margin_inches: 1.5,
+        right_margin_inches: 1.0,
+        bottom_margin_inches: 1.0,
+      });
+      toast.success("Downloaded Registry Paper-Book (.docx with 1.75\" left binding margin)");
+    } catch (err: any) {
+      console.error("DOCX export error:", err);
+      toast.warning("DOCX compilation failed. Falling back to basic Word document.");
+      handleLegacyDownloadDoc();
+    } finally {
+      setExportingDocx(false);
+    }
   };
 
   const handleCopyText = () => {
@@ -841,6 +971,44 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
               <span className="font-mono">
                 ~{pages.length} {pages.length === 1 ? "Court Page" : "Court Pages"}
               </span>
+              {deficitCount > 0 && (
+                <>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={handleScrollToNextDeficit}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono cursor-pointer transition-colors"
+                    style={{
+                      background: "rgba(212, 136, 6, 0.12)",
+                      color: "#d48806",
+                      border: "1px dashed rgba(212, 136, 6, 0.4)",
+                    }}
+                    title="Click to jump to next missing court variable"
+                  >
+                    <AlertCircle size={11} />
+                    <span>{deficitCount} Missing Fact{deficitCount > 1 ? "s" : ""} [REQUIRED]</span>
+                  </button>
+                </>
+              )}
+              {temporalWarning?.hasViolation && (
+                <>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={handleFixTemporalViolations}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-mono cursor-pointer transition-colors border animate-pulse"
+                    style={{
+                      background: "rgba(239, 68, 68, 0.12)",
+                      borderColor: "rgba(239, 68, 68, 0.4)",
+                      color: "#f87171",
+                    }}
+                    title="Article 20(1) Ex Post Facto Alert: Pre-July 1, 2024 incident citing BNS penal sections. Click to auto-substitute with IPC."
+                  >
+                    <AlertTriangle size={11} />
+                    <span>⚠️ Art. 20(1) Alert: Switch to IPC (Click to Fix)</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -860,11 +1028,12 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleDownloadDoc}
+            disabled={exportingDocx}
             className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 cursor-pointer"
-            title="Download formatted court .doc file"
+            title="Download Registry Paper-Book (.docx with 1.75in left binding margin)"
           >
-            <Download size={13} style={{ color: "var(--brass)" }} />
-            <span>Export DOC</span>
+            {exportingDocx ? <Loader2 size={13} className="animate-spin text-[var(--brass)]" /> : <Download size={13} style={{ color: "var(--brass)" }} />}
+            <span>{exportingDocx ? "Exporting..." : "Export .DOCX"}</span>
           </button>
 
           <button
@@ -941,6 +1110,24 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
             <Plus size={13} />
             <span>Add Page</span>
           </button>
+
+          {onOpenAdversarial && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={onOpenAdversarial}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition-all cursor-pointer hover:opacity-90 active:scale-95"
+              style={{
+                background: "var(--brass-soft)",
+                color: "var(--brass-bright)",
+                border: "1px solid var(--brass)",
+              }}
+              title="Strategic Adversarial War Room: 4-Column Opposition Matrix, Stay Analyzer & Weakness Radar"
+            >
+              <Swords size={13} />
+              <span>Adversarial Strategy</span>
+            </button>
+          )}
 
           {/* Indian Legal Quick Inserts Dropdown */}
           <div className="relative editor-dropdown-container">
@@ -1382,7 +1569,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
                 boxShadow: "0 10px 40px -10px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.08)",
                 position: "relative",
               }}
-              onClick={() => setActivePageIndex(index)}
+              onClick={(e) => handleEditorSheetClick(e, index)}
             >
               {/* Page Header (Page N of Total & Delete Option) */}
               <div className="legal-page-header absolute top-4 right-8 text-[10px] font-mono opacity-40 select-none flex items-center gap-2">

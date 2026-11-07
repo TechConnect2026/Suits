@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import SuitsBaseException
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.api import auth, search, cases, orders, chat, bookmarks, history, analytics, files, documents, statutes, counter_pleading
+from app.api import auth, search, cases, orders, chat, bookmarks, history, analytics, files, documents, statutes, counter_pleading, drafting, adversarial, precedents
 from app.clients.ecourts_client import ecourts_client
 from app.clients.kanoon_client import kanoon_client
 from app.services.cache_service import cache_service
@@ -107,7 +107,35 @@ app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(AIProviderMiddleware)
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
+
 # --- Global Exception Handler ---
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    messages = []
+    for err in exc.errors():
+        msg = err.get('msg', '')
+        if msg.startswith('Value error, '):
+            msg = msg[len('Value error, '):]
+        loc = err.get('loc', [])
+        field = loc[-1] if loc else ''
+        if field and field not in ('body', '__root__'):
+            messages.append(f'{field}: {msg}')
+        else:
+            messages.append(msg)
+    formatted_msg = '; '.join(messages) if messages else 'Invalid request data.'
+    return JSONResponse(
+        status_code=422,
+        content={
+            'success': False,
+            'message': formatted_msg,
+            'error_code': 'VALIDATION_ERROR',
+            'detail': jsonable_encoder(exc.errors()),
+        },
+    )
+
 
 @app.exception_handler(SuitsBaseException)
 async def suits_exception_handler(request: Request, exc: SuitsBaseException):
@@ -150,6 +178,9 @@ app.include_router(files.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
 app.include_router(statutes.router, prefix="/api")
 app.include_router(counter_pleading.router, prefix="/api")
+app.include_router(drafting.router, prefix="/api")
+app.include_router(adversarial.router, prefix="/api")
+app.include_router(precedents.router, prefix="/api")
 
 
 @app.get("/")

@@ -42,7 +42,16 @@ if _is_sqlite:
 else:
     connect_args = {}
     db_url = settings.database_url
-    if "sslmode=require" in db_url or "ssl=require" in db_url:
+
+    # Ensure asyncpg driver prefix is present
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+asyncpg://"):
+        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    # Supabase & Cloud PostgreSQL SSL & Connection Pooler settings
+    is_supabase = "supabase.co" in db_url or "supabase.com" in db_url
+    if "sslmode=require" in db_url or "ssl=require" in db_url or is_supabase:
         import ssl
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
@@ -50,6 +59,9 @@ else:
         connect_args["ssl"] = ctx
         db_url = db_url.replace("?sslmode=require", "").replace("&sslmode=require", "")
         db_url = db_url.replace("?ssl=require", "").replace("&ssl=require", "")
+
+    if is_supabase or "pooler" in db_url:
+        connect_args["statement_cache_size"] = 0
 
     engine = create_async_engine(
         db_url,
@@ -74,6 +86,12 @@ async def init_db() -> None:
     from sqlalchemy import text
 
     async with engine.begin() as conn:
+        if not _is_sqlite:
+            # Advisory lock prevents concurrent Uvicorn workers from racing on CREATE TYPE
+            try:
+                await conn.execute(text("SELECT pg_advisory_xact_lock(424242);"))
+            except Exception:
+                pass
         await conn.run_sync(Base.metadata.create_all)
         
         if _is_sqlite:
@@ -129,4 +147,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
-

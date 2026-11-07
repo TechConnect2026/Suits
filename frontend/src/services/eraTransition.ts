@@ -4,7 +4,11 @@ import type {
   ConcordanceLookupResponse,
   EraTransitionCaseAnalysis,
   EraTransitionInstant,
+  StatutoryVerbatimDiffResponse,
+  TemporalInspectionRequest,
+  TemporalInspectionResponse,
   TransitionQuestionResponse,
+  TransitionalJurisprudenceResponse,
 } from '@/types/era_transition';
 
 export const eraTransitionService = {
@@ -33,13 +37,6 @@ export const eraTransitionService = {
 
   /**
    * Zero-LLM instant concordance snapshot for a case.
-   *
-   * Resolves the applicable statutory era and extracts all relevant IPC ↔ BNS
-   * concordance pairs entirely from the static Python dictionary — no LLM call,
-   * zero token consumption, returns in <10ms.
-   *
-   * Call this on every criminal case load.
-   * Call getCaseEraTransition() only when the user clicks "Draft Transition Arguments".
    */
   getInstantConcordance: async (
     cnr: string
@@ -58,11 +55,7 @@ export const eraTransitionService = {
   },
 
   /**
-   * Fetch full criminal law era transition matrix WITH Gemini-drafted pleading
-   * paragraphs and transposed Supreme Court precedents.
-   *
-   * ⚠ This triggers an LLM call. Only invoke on explicit user action
-   * (e.g., user clicking "Draft Transition Arguments").
+   * Complete era transition analysis for a case.
    */
   getCaseEraTransition: async (
     cnr: string
@@ -75,17 +68,13 @@ export const eraTransitionService = {
         return null;
       }
       return res.data.data;
-    } catch (err: any) {
-      if (err?.response?.status === 204) {
-        return null;
-      }
+    } catch {
       return null;
     }
   },
 
   /**
    * Force regenerate criminal era transition analysis by invalidating state cache.
-   * ⚠ This triggers an LLM call. Only invoke on explicit user action.
    */
   refreshCaseEraTransition: async (
     cnr: string
@@ -124,5 +113,57 @@ export const eraTransitionService = {
       return null;
     }
   },
-};
 
+  // ── Pillar 4: Temporal Safeguard & Verbatim Diff APIs ──
+
+  /**
+   * Audits incident & FIR dates against the July 1, 2024 constitutional cutoff.
+   */
+  inspectTemporal: async (
+    req: TemporalInspectionRequest
+  ): Promise<TemporalInspectionResponse> => {
+    const res = await api.post<APIResponse<TemporalInspectionResponse>>(
+      `/statutes/era-transition/inspect-temporal`,
+      req
+    );
+    if (!res.data || !res.data.data) {
+      throw new Error("Failed to inspect temporal incident.");
+    }
+    return res.data.data;
+  },
+
+  /**
+   * Fetches word-by-word statutory diff and metadata comparison for a pair.
+   */
+  getVerbatimDiff: async (
+    pairId: string
+  ): Promise<StatutoryVerbatimDiffResponse> => {
+    const res = await api.get<APIResponse<StatutoryVerbatimDiffResponse>>(
+      `/statutes/era-transition/verbatim-diff/${encodeURIComponent(pairId)}`
+    );
+    if (!res.data || !res.data.data) {
+      throw new Error("Failed to fetch verbatim statutory diff.");
+    }
+    return res.data.data;
+  },
+
+  /**
+   * Lists curated landmark authorities on criminal reform transition.
+   */
+  getTransitionalJurisprudence: async (
+    topic?: string,
+    query?: string
+  ): Promise<TransitionalJurisprudenceResponse> => {
+    let url = `/statutes/era-transition/transitional-jurisprudence`;
+    const params: string[] = [];
+    if (topic && topic !== "ALL") params.push(`topic=${encodeURIComponent(topic)}`);
+    if (query && query.trim()) params.push(`query=${encodeURIComponent(query.trim())}`);
+    if (params.length > 0) url += `?${params.join("&")}`;
+
+    const res = await api.get<APIResponse<TransitionalJurisprudenceResponse>>(url);
+    if (!res.data || !res.data.data) {
+      throw new Error("Failed to fetch transitional jurisprudence.");
+    }
+    return res.data.data;
+  },
+};

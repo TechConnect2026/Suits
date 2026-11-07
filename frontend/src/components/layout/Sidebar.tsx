@@ -77,6 +77,14 @@ function DocumentIcon() {
   );
 }
 
+function ChatbotIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function ScalesIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -91,6 +99,7 @@ const navItems = [
   { path: "/files",      label: "Files",      Icon: FilesIcon },
   { path: "/document",   label: "Document",   Icon: DocumentIcon },
   { path: "/research",   label: "Research",   Icon: ResearchIcon },
+  { path: "/chat",       label: "Chatbot",    Icon: ChatbotIcon },
   { path: "/transition", label: "Transition", Icon: TransitionIcon },
   { path: "/analytics",  label: "Analytics",  Icon: AnalyticsIcon },
   { path: "/history",    label: "History",    Icon: HistoryIcon },
