@@ -1,0 +1,80 @@
+name: suits-prod
+
+services:
+  # -------------------------------------------------------------
+  # Lightweight Redis Cache & Rate Limiter (~20 MB RAM)
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: suits_redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - suits_prod_net
+
+  # -------------------------------------------------------------
+  # SUITS FastAPI Backend (Uses external Supabase PostgreSQL)
+  # -------------------------------------------------------------
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/techconnect2026/suits-backend:latest}
+    container_name: suits_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - suits_uploads:/app/data/uploads
+      - suits_pdf_cache:/app/data/pdf_cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    networks:
+      - suits_prod_net
+
+  # -------------------------------------------------------------
+  # Caddy Reverse Proxy (Automatic Let's Encrypt HTTPS, $0 ALB)
+  # -------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: suits_caddy
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-http://:80}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - suits_prod_net
+
+volumes:
+  suits_uploads:
+  suits_pdf_cache:
+  caddy_data:
+  caddy_config:
+
+networks:
+  suits_prod_net:
+    driver: bridge
+
