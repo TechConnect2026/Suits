@@ -234,6 +234,7 @@ frontend/dist/
 frontend/node_modules/
 
 # Runtime data & uploads
+data/
 backend/data/uploads/*
 !backend/data/uploads/.gitkeep
 backend/data/pdf_cache/*
