@@ -69,6 +69,7 @@ type FontFamily = "sans" | "serif";
 type FontSize = 14 | 16 | 18 | 20;
 
 // Client-side in-memory cache for instantaneous reopening of PDFs during a session
+const PDF_CACHE_VERSION = "v3";
 const pdfBufferCache = new Map<string, ArrayBuffer>();
 const textCache = new Map<string, string>();
 
@@ -239,7 +240,7 @@ export function DocumentReaderModal({
   }, [isOpen, onClose, allowModeToggle]);
 
   const loadPDF = async (fname: string) => {
-    const cacheKey = effectiveId ? `doc_${effectiveId}` : `${effectiveCnr}_${fname}`;
+    const cacheKey = effectiveId ? `doc_${effectiveId}_${PDF_CACHE_VERSION}` : `${effectiveCnr}_${fname}_${PDF_CACHE_VERSION}`;
     if (pdfBufferCache.has(cacheKey)) {
       const cached = pdfBufferCache.get(cacheKey)!;
       setPdfData(cached.slice(0));
@@ -278,7 +279,7 @@ export function DocumentReaderModal({
   };
 
   const loadMarkdown = async (fname: string) => {
-    const cacheKey = effectiveId ? `doc_md_${effectiveId}` : `${effectiveCnr}_${fname}`;
+    const cacheKey = effectiveId ? `doc_md_${effectiveId}_${PDF_CACHE_VERSION}` : `${effectiveCnr}_${fname}_${PDF_CACHE_VERSION}`;
     if (textCache.has(cacheKey)) {
       setTextContent(textCache.get(cacheKey)!);
       setTextLoading(false);

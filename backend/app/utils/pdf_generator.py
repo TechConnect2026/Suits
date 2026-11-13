@@ -54,19 +54,18 @@ class CourtRecordPDF(FPDF):
 
 def _extract_and_sanitize_signatures(content: str) -> tuple[str, list[str]]:
     """Detect and separate digital signature metadata blocks from the main text."""
-    signatures: list[str] = []
-    
-    # Common signature block pattern in Indian Kanoon judgments
-    sig_block_regex = re.compile(
-        r"(?:Digitally signed by\s+[^\n]+(?:\n\s*(?:Date|Reason|Location|Signature)[^\n]+)*)",
-        re.IGNORECASE,
-    )
-    
-    def repl(match):
-        signatures.append(match.group(0).strip())
-        return "\n"
-        
-    cleaned = sig_block_regex.sub(repl, content)
+    try:
+        from app.utils.kanoon_formatter import clean_court_text_and_extract_signatures
+    except ImportError:
+        from backend.app.utils.kanoon_formatter import clean_court_text_and_extract_signatures
+    cleaned, sig_dicts = clean_court_text_and_extract_signatures(content)
+    signatures = []
+    for s in sig_dicts:
+        sig_str = f"Signatory: {s['signer']}"
+        if s.get("date"):
+            sig_str += f"  |  {s['date']}"
+        sig_str += f"  |  {s.get('status', 'Digitally Signed')}"
+        signatures.append(sig_str)
     return cleaned, signatures
 
 
@@ -108,14 +107,28 @@ def _reflow_paragraphs(text: str) -> list[tuple[str, str]]:
     def flush_para():
         nonlocal current_para
         if current_para:
-            reflowed = " ".join(current_para).strip()
+            reflowed = " ".join(current_para)
+            reflowed = re.sub(r'[ \t]+', ' ', reflowed).strip()
             if reflowed:
                 blocks.append(("paragraph", reflowed))
             current_para = []
 
-    for line in raw_lines:
+    for i, line in enumerate(raw_lines):
         if not line:
-            flush_para()
+            if current_para:
+                last_line = current_para[-1]
+                next_non_empty = ""
+                for j in range(i + 1, min(len(raw_lines), i + 6)):
+                    if raw_lines[j]:
+                        next_non_empty = raw_lines[j]
+                        break
+
+                ends_sentence = bool(re.search(r'[\.\?\!][\'"”’]?$', last_line))
+                is_next_numbered = bool(para_start_re.match(next_non_empty))
+                is_next_banner = bool(court_banner_re.match(next_non_empty)) or bool(party_re.match(next_non_empty)) or bool(judgment_title_re.match(next_non_empty)) or next_non_empty.startswith("#")
+
+                if (ends_sentence and (is_next_numbered or is_next_banner or (next_non_empty and next_non_empty[0].isupper() and len(last_line) < 65))) or is_next_numbered or is_next_banner:
+                    flush_para()
             continue
 
         # Markdown headings
@@ -162,7 +175,13 @@ def _reflow_paragraphs(text: str) -> list[tuple[str, str]]:
             continue
 
         # Normal line continuation within paragraph
-        current_para.append(line)
+        if current_para:
+            if current_para[-1].endswith("-"):
+                current_para[-1] = current_para[-1][:-1] + line
+            else:
+                current_para.append(line)
+        else:
+            current_para.append(line)
 
     flush_para()
     return blocks

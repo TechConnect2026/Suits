@@ -317,11 +317,32 @@ class OrderService:
         """Get court document markdown from Indian Kanoon API with permanent caching."""
         redis_key = f"order_md:{cnr}:{filename}"
 
+        def _ensure_clean_md(raw_md: str) -> str:
+            if not raw_md:
+                return raw_md
+            if "signature not verified" in raw_md.lower() or "digitally signed by" in raw_md.lower() or "\x0c" in raw_md:
+                from app.utils.kanoon_formatter import clean_court_text_and_extract_signatures, reflow_legal_markdown
+                cleaned, sigs = clean_court_text_and_extract_signatures(raw_md)
+                reflowed = reflow_legal_markdown(cleaned)
+                if sigs:
+                    reflowed += "\n\n---\n\n### Verified Digital Record\n"
+                    for s in sigs:
+                        reflowed += f"- **Signatory:** {s['signer']}\n"
+                        if s.get("date"):
+                            reflowed += f"- **Date:** {s['date']}\n"
+                        reflowed += f"- **Status:** {s['status']}\n"
+                return reflowed
+            return raw_md
+
         # 1. Check Redis cache (only accept valid content)
         cached = await cache_service.get(redis_key)
         if cached and isinstance(cached, dict):
             cached_md = cached.get("markdown", "")
             if cached_md and not cached_md.startswith("*") and "could not be" not in cached_md.lower():
+                cleaned = _ensure_clean_md(cached_md)
+                if cleaned != cached_md:
+                    cached["markdown"] = cleaned
+                    await cache_service.set(redis_key, cached)
                 return OrderMarkdownResponse(**cached)
 
         # 2. Check PostgreSQL / SQLite permanent cache
@@ -331,7 +352,8 @@ class OrderService:
                 cached_md = cached_pg.markdown
                 if not cached_md.startswith("*") and "could not be" not in cached_md.lower():
                     logger.info("ORDER_MARKDOWN_CACHE_HIT", cnr=cnr, filename=filename, source="db", size=len(cached_md))
-                    response = OrderMarkdownResponse(cnr=cnr, filename=filename, markdown=cached_md)
+                    cleaned = _ensure_clean_md(cached_md)
+                    response = OrderMarkdownResponse(cnr=cnr, filename=filename, markdown=cleaned)
                     await cache_service.set(redis_key, response.model_dump())
                     return response
         except Exception as db_err:
@@ -558,7 +580,7 @@ class OrderService:
         from pathlib import Path
         cache_dir = Path("./data/pdf_cache")
         cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_file = cache_dir / f"{tid}_v2.pdf"
+        cache_file = cache_dir / f"{tid}_v3.pdf"
 
         if cache_file.exists() and cache_file.stat().st_size > 100:
             logger.info("order_pdf_served_from_disk_cache", tid=tid, cnr=cnr)
