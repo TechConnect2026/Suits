@@ -19,6 +19,7 @@ import {
   Sparkles,
   ArrowRight,
   ShieldAlert,
+  RotateCw,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -351,6 +352,17 @@ export default function FilesPage() {
     setReaderInitialMode(mode);
   };
 
+  const handleReprocess = async (docId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await documentService.reprocess(docId);
+      toast.success("OCR & Extraction restarted.");
+      loadData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to restart extraction.");
+    }
+  };
+
   const handleDelete = async (docId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("Are you sure you want to delete this document?")) return;
@@ -537,6 +549,19 @@ export default function FilesPage() {
 
               {/* Right Column: Actions */}
               <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                {(doc.status === "failed" || doc.status === "pending") && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleReprocess(doc.id, e)}
+                    className="btn btn-ghost flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border hover:bg-amber-500/10 cursor-pointer"
+                    style={{ borderColor: "rgba(245, 158, 11, 0.4)", color: "#f59e0b" }}
+                    title="Retry OCR & Text Extraction"
+                  >
+                    <RotateCw size={13} />
+                    <span>Retry Extraction</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={(e) => {

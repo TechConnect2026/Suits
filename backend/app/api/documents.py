@@ -99,9 +99,12 @@ async def upload_document(
     )
     repo = DocumentRepository(db)
     doc = await repo.create(doc)
+    await db.commit()
+    await db.refresh(doc)
     document_id = doc.id
 
     background_tasks.add_task(_run_processing, document_id)
+    asyncio.create_task(_run_processing(document_id))
 
     logger.info("document_uploaded", document_id=str(document_id), filename=file.filename)
     return APIResponse(
@@ -132,6 +135,12 @@ async def list_documents(
         limit=limit,
         offset=offset,
     )
+    # Auto-resume any orphaned pending documents so they never hang
+    for d in docs:
+        if d.status == DocumentStatus.PENDING:
+            logger.info("auto_resuming_pending_document", document_id=str(d.id))
+            asyncio.create_task(_run_processing(d.id))
+
     return APIResponse(data=[DocumentListItem.model_validate(d) for d in docs])
 
 
@@ -399,10 +408,11 @@ async def reprocess_document(
 
     doc.status = DocumentStatus.PENDING
     doc.error_message = None
-    await db.flush()
+    await db.commit()
+    await db.refresh(doc)
 
-    from app.core.config import settings
     background_tasks.add_task(_run_processing, document_id)
+    asyncio.create_task(_run_processing(document_id))
     return APIResponse(
         data=DocumentUploadResponse.model_validate(doc),
         message="Reprocessing started.",

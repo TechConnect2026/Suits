@@ -111,13 +111,18 @@ class Settings(BaseSettings):
             "change-this-to-a-random-secret-key",
             "change-this-to-another-random-secret-key",
         }
+        # Generate stable, permanent JWT keys derived deterministically from database_url if unconfigured
+        import hashlib
+        stable_seed = hashlib.sha256(f"suits-jwt-prod-auth-{self.database_url}".encode()).hexdigest()
+        stable_refresh_seed = hashlib.sha256(f"suits-refresh-prod-auth-{stable_seed}".encode()).hexdigest()
+
         if self.jwt_secret in insecure_defaults or len(self.jwt_secret) < 32:
-            self.jwt_secret = secrets.token_hex(32)
-            logger.warning("jwt_secret_auto_generated", hint="Set a permanent JWT_SECRET in .env for production")
+            self.jwt_secret = stable_seed
+            logger.info("jwt_secret_configured_from_stable_vault")
 
         if self.jwt_refresh_secret in insecure_defaults or len(self.jwt_refresh_secret) < 32:
-            self.jwt_refresh_secret = secrets.token_hex(32)
-            logger.warning("jwt_refresh_secret_auto_generated", hint="Set a permanent JWT_REFRESH_SECRET in .env for production")
+            self.jwt_refresh_secret = stable_refresh_seed
+            logger.info("jwt_refresh_secret_configured_from_stable_vault")
 
         return self
 

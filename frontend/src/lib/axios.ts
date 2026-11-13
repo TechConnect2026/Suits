@@ -9,6 +9,7 @@ const api = axios.create({
 });
 
 import { useAIModeStore } from "@/store/ai-mode-store";
+import { useAuthStore } from "@/store/auth-store";
 
 // Request interceptor to attach access token and AI provider header
 api.interceptors.request.use(
@@ -97,7 +98,11 @@ api.interceptors.response.use(
           failedQueue.push({
             resolve: (token: string) => {
               if (originalRequest.headers) {
-                originalRequest.headers.Authorization = `Bearer ${token}`;
+                if (typeof originalRequest.headers.set === "function") {
+                  originalRequest.headers.set("Authorization", `Bearer ${token}`);
+                } else {
+                  originalRequest.headers["Authorization"] = `Bearer ${token}`;
+                }
               }
               resolve(api(originalRequest));
             },
@@ -129,7 +134,11 @@ api.interceptors.response.use(
             }
             api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
             if (originalRequest.headers) {
-              originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+              if (typeof originalRequest.headers.set === "function") {
+                originalRequest.headers.set("Authorization", `Bearer ${newAccessToken}`);
+              } else {
+                originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+              }
             }
             processQueue(null, newAccessToken);
             isRefreshing = false;
@@ -140,13 +149,21 @@ api.interceptors.response.use(
           isRefreshing = false;
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
+          useAuthStore.getState().logout();
           window.dispatchEvent(new Event("auth:logout"));
+          if (window.location.pathname !== "/login" && window.location.pathname !== "/") {
+            window.location.href = "/login";
+          }
           return Promise.reject(refreshError);
         }
       } else {
         isRefreshing = false;
         localStorage.removeItem("access_token");
+        useAuthStore.getState().logout();
         window.dispatchEvent(new Event("auth:logout"));
+        if (window.location.pathname !== "/login" && window.location.pathname !== "/") {
+          window.location.href = "/login";
+        }
       }
     }
     

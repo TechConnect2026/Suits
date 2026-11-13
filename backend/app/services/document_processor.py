@@ -537,19 +537,28 @@ class DocumentProcessor:
 
     async def process_document(self, document_id: uuid.UUID) -> None:
         """Run the full OCR → AI analysis → chunk → embed pipeline for a document."""
+        import asyncio
         from sqlalchemy import select
 
-        result = await self.db.execute(
-            select(UserDocument).where(UserDocument.id == document_id)
-        )
-        doc = result.scalar_one_or_none()
+        # Retry up to 10 times with 0.5s interval to ensure database visibility across connection pools
+        doc = None
+        for attempt in range(10):
+            result = await self.db.execute(
+                select(UserDocument).where(UserDocument.id == document_id)
+            )
+            doc = result.scalar_one_or_none()
+            if doc is not None:
+                break
+            await asyncio.sleep(0.5)
+
         if doc is None:
-            logger.error("process_document_not_found", document_id=str(document_id))
+            logger.error("process_document_not_found_after_retries", document_id=str(document_id))
             return
 
-        # Mark as processing
+        # Mark as processing and commit immediately so all concurrent queries see real-time status
         doc.status = DocumentStatus.PROCESSING
-        await self.db.flush()
+        await self.db.commit()
+        await self.db.refresh(doc)
 
         try:
             # Read file from disk
@@ -604,9 +613,9 @@ class DocumentProcessor:
             except Exception as emb_exc:
                 logger.warning("embedding_generation_skipped", error=str(emb_exc))
 
-            # Mark as indexed
+            # Mark as indexed and commit immediately
             doc.status = DocumentStatus.INDEXED
-            await self.db.flush()
+            await self.db.commit()
 
             logger.info(
                 "document_processed",
@@ -620,4 +629,4 @@ class DocumentProcessor:
             logger.error("document_processing_failed", document_id=str(document_id), error=str(exc))
             doc.status = DocumentStatus.FAILED
             doc.error_message = str(exc)
-            await self.db.flush()
+            await self.db.commit()

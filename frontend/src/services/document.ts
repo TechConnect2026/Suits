@@ -24,7 +24,6 @@ export const documentService = {
     if (options.tag) formData.append("tag", options.tag);
 
     const res = await api.post<APIResponse<UserDocument>>("/documents/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress: (e) => {
         if (onProgress && e.total) {
           onProgress(Math.round((e.loaded / e.total) * 100));
