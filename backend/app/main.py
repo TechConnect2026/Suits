@@ -93,7 +93,7 @@ from app.clients.ollama_client import ollama_client
 
 cors_kwargs = {
     "allow_origins": settings.cors_origins_list,
-    "allow_origin_regex": r"^(https?://(?:localhost|127\.0\.0\.1)(?::\d+)?|https://.*\.vercel\.app)$",
+    "allow_origin_regex": r"^(https?://(?:localhost|127\.0\.0\.1)(?::\d+)?|https://.*\.vercel\.app|https://.*\.duckdns\.org)$",
     "allow_credentials": True,
     "allow_methods": ["*"],
     "allow_headers": ["*"],
