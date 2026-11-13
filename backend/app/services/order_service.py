@@ -580,7 +580,7 @@ class OrderService:
         from pathlib import Path
         cache_dir = Path("./data/pdf_cache")
         cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_file = cache_dir / f"{tid}_v3.pdf"
+        cache_file = cache_dir / f"{tid}_v4.pdf"
 
         if cache_file.exists() and cache_file.stat().st_size > 100:
             logger.info("order_pdf_served_from_disk_cache", tid=tid, cnr=cnr)

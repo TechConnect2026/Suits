@@ -83,3 +83,4 @@ if __name__ == "__main__":
     precompute_anchors()
     precompute_doctrines()
     print("All static InLegalBERT embeddings precomputed successfully!")
+

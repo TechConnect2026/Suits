@@ -67,7 +67,7 @@ class GeminiClient:
     def _model_candidates(self) -> list[str]:
         """Return ordered list of verified healthy models to try."""
         primary = settings.gemini_model or "gemini-3.1-flash-lite"
-        candidates = [primary, "gemini-3.1-flash-lite", "gemini-3.5-flash"]
+        candidates = [primary, "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-pro"]
         seen: set[str] = set()
         return [m for m in candidates if not (m in seen or seen.add(m))]
 
@@ -246,18 +246,18 @@ class GeminiClient:
             return "*No PDF content was available for this order.*"
 
         prompt_text = (
-            "You are a legal document transcription expert. "
-            "The attached document is an official Indian court order in PDF format.\n\n"
+            "You are an expert legal document transcription specialist. "
+            "The attached document is an official Indian legal document in PDF format "
+            "(such as a court order, judgment, petition, FIR, affidavit, agreement, or case pleading).\n\n"
             "Your task:\n"
-            "1. Transcribe the FULL and COMPLETE text of the order faithfully.\n"
-            "2. Format the output as clean, well-structured Markdown.\n"
-            "3. Use `#` headings for the court name, `##` for the case title, "
-            "`###` for sections like CORAM, ORDER, etc.\n"
-            "4. Preserve all party names, dates, judge names, and legal citations exactly as written.\n"
-            "5. Use `**bold**` for party names and judge names.\n"
-            "6. Use numbered lists for court directions/orders.\n"
-            "7. Do NOT summarize — transcribe the complete text.\n"
-            "8. If the document is not a court order, state that clearly."
+            "1. Transcribe the FULL and COMPLETE text of the document faithfully into clean, structured Markdown.\n"
+            "2. Transcribe all text visible across all pages without truncating, omitting, or summarizing.\n"
+            "3. Use `#` headings for the court / authority name, `##` for the case / document title, "
+            "`###` for sections like CORAM, ORDER, PRAYER, etc.\n"
+            "4. Preserve all party names, dates, judge names, section numbers, and legal citations exactly as written.\n"
+            "5. Use `**bold**` for party names, sections, and judge names.\n"
+            "6. Use numbered lists for directions, clauses, or orders.\n"
+            "7. Do NOT summarize — transcribe the full text as written."
         )
 
         pdf_part = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")

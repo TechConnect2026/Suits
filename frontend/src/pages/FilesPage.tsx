@@ -268,7 +268,14 @@ export default function FilesPage() {
     navigate("/document");
   };
 
+  const pollCountRef = useRef(0);
+
   const loadData = useCallback(async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     try {
       const [docs, st] = await Promise.all([
         documentService.list(filters),
@@ -276,8 +283,10 @@ export default function FilesPage() {
       ]);
       setDocuments(docs);
       setStats(st);
-    } catch {
-      toast.error("Failed to load documents.");
+    } catch (err: any) {
+      if (err?.response?.status !== 401) {
+        toast.error("Failed to load documents.");
+      }
     } finally {
       setLoading(false);
     }
@@ -287,11 +296,33 @@ export default function FilesPage() {
     loadData();
   }, [loadData]);
 
-  // Polling for processing documents
+  // Polling for processing documents with backoff and timeout
   useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
     const hasProcessing = documents.some((d) => d.status === "pending" || d.status === "processing");
-    if (!hasProcessing) return;
-    const interval = setInterval(loadData, 4000);
+    if (!hasProcessing) {
+      pollCountRef.current = 0;
+      return;
+    }
+
+    // Stop polling after 20 cycles (~2.5 minutes) to avoid infinite polling on stuck docs
+    if (pollCountRef.current >= 20) {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      pollCountRef.current += 1;
+      try {
+        await loadData();
+      } catch (err: any) {
+        if (err?.response?.status === 401) {
+          clearInterval(interval);
+        }
+      }
+    }, 8000);
+
     return () => clearInterval(interval);
   }, [documents, loadData]);
 

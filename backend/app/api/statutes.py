@@ -82,7 +82,7 @@ async def ask_era_transition_question(
 # ── Pillar 4: Temporal Safeguard & Verbatim Diff Endpoints ──
 
 @router.post("/era-transition/inspect-temporal", response_model=APIResponse[TemporalInspectionResponse])
-def inspect_temporal_incident(
+async def inspect_temporal_incident(
     payload: TemporalInspectionRequest,
     user: OptionalUser = None,
 ) -> APIResponse[TemporalInspectionResponse]:

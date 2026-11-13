@@ -29,6 +29,9 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 async def _run_processing(document_id: uuid.UUID) -> None:
     """Run document processing in a background task with its own DB session."""
     from app.database.session import async_session_factory
+    from sqlalchemy import select
+    from app.models.user_document import UserDocument, DocumentStatus
+
     async with async_session_factory() as session:
         try:
             processor = DocumentProcessor(session)
@@ -37,6 +40,19 @@ async def _run_processing(document_id: uuid.UUID) -> None:
         except Exception as exc:
             await session.rollback()
             logger.error("background_processing_failed", document_id=str(document_id), error=str(exc))
+            # Mark document as FAILED in an isolated session so it never hangs in PROCESSING
+            try:
+                async with async_session_factory() as fail_session:
+                    res = await fail_session.execute(
+                        select(UserDocument).where(UserDocument.id == document_id)
+                    )
+                    failed_doc = res.scalar_one_or_none()
+                    if failed_doc:
+                        failed_doc.status = DocumentStatus.FAILED
+                        failed_doc.error_message = f"Processing error: {str(exc)[:300]}"
+                        await fail_session.commit()
+            except Exception as mark_err:
+                logger.warning("failed_to_mark_doc_status_failed", error=str(mark_err))
 
 
 @router.post("/upload", response_model=APIResponse[DocumentUploadResponse])
