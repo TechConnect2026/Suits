@@ -26,9 +26,7 @@ class BookmarkService:
         return BookmarkResponse.model_validate(created)
 
     async def remove_bookmark(self, user_id: uuid.UUID, cnr: str) -> None:
-        deleted = await self.repo.delete(user_id, cnr)
-        if not deleted:
-            raise NotFoundError("Bookmark")
+        await self.repo.delete(user_id, cnr)
 
     async def is_bookmarked(self, user_id: uuid.UUID, cnr: str) -> bool:
         return await self.repo.exists(user_id, cnr)

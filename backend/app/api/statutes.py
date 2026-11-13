@@ -1,7 +1,7 @@
 """Statutes router - Criminal Law Era Transition Engine (IPC/CrPC/IEA ↔ BNS/BNSS/BSA)."""
 
 import re
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Query, Response, HTTPException
 import structlog
 
 from app.dependencies.auth import CurrentUser, OptionalUser, DbSession
@@ -87,8 +87,15 @@ def inspect_temporal_incident(
     user: OptionalUser = None,
 ) -> APIResponse[TemporalInspectionResponse]:
     """Inspects incident and FIR dates against the July 1, 2024 cutoff for Article 20(1) compliance."""
-    result = temporal_safeguard_service.inspect_temporal_incident(payload)
-    return APIResponse(data=result, message="Temporal incident analysis complete.")
+    try:
+        result = temporal_safeguard_service.inspect_temporal_incident(payload)
+        return APIResponse(data=result, message="Temporal incident analysis complete.")
+    except Exception as exc:
+        logger.error("inspect_temporal_incident_failed", error=str(exc))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unable to audit dates: {str(exc)}",
+        )
 
 
 @router.get("/era-transition/verbatim-diff/{pair_id}", response_model=APIResponse[StatutoryVerbatimDiffResponse])

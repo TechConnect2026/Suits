@@ -21,6 +21,7 @@ export default function ChatPage() {
   const streamAbortRef = useRef<AbortController | null>(null);
   const lastProcessedPromptRef = useRef<string | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
+  const activelyStreamingConvoIdRef = useRef<string | null>(null);
 
   const { pendingFullScreenPrompt, setPendingFullScreenPrompt } = useDictationStore();
 
@@ -56,6 +57,10 @@ export default function ChatPage() {
   };
 
   const loadMessages = async (id: string) => {
+    // Prevent clobbering active message stream when creating and navigating to a new conversation
+    if (activelyStreamingConvoIdRef.current === id) {
+      return;
+    }
     try {
       const msgs = await chatService.getMessages(id);
       setMessages(msgs || []);
@@ -148,6 +153,7 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, userMsg]);
 
       const convoId = targetId;
+      activelyStreamingConvoIdRef.current = convoId;
       let accumulated = "";
       const controller = chatService.streamMessage(
         convoId,
@@ -157,6 +163,7 @@ export default function ChatPage() {
           setStreamingContent(accumulated);
         },
         (questions) => {
+          activelyStreamingConvoIdRef.current = null;
           const assistantMsg: ChatMessage = {
             id: `server-${Date.now()}`,
             role: "assistant",
@@ -169,6 +176,7 @@ export default function ChatPage() {
           setLoading(false);
         },
         async (err) => {
+          activelyStreamingConvoIdRef.current = null;
           if (err !== "AbortError") {
             // Self-healing: if targetId 404'd, create a fresh conversation and auto-retry
             if (err && err.includes("404")) {

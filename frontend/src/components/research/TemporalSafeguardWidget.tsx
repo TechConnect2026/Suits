@@ -62,7 +62,13 @@ export function TemporalSafeguardWidget({
         toast.success("Constitutional date audit complete. No violations detected.");
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to inspect dates.");
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        (err?.response?.status === 502
+          ? "Server is currently initializing upstream services. Please retry in a few seconds."
+          : err?.message || "Failed to inspect dates.");
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }

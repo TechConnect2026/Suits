@@ -83,19 +83,24 @@ export function SearchResultCard({
         {/* Bookmark button */}
         {onBookmarkToggle && (
           <button
-            onClick={() => onBookmarkToggle(item.cnr, item.case_title)}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onBookmarkToggle(item.cnr, item.case_title);
+            }}
             disabled={isToggling}
             style={{
               background: "transparent",
               border: "none",
-              cursor: "pointer",
+              cursor: isToggling ? "wait" : "pointer",
               color: isBookmarked ? "var(--brass)" : "var(--ink-faint)",
               padding: "4px",
               display: "flex",
               alignItems: "center",
               borderRadius: "var(--radius-sm)",
-              opacity: isToggling ? 0.5 : 1,
-              transition: "color 140ms ease",
+              opacity: isToggling ? 0.6 : 1,
+              transition: "color 140ms ease, opacity 140ms ease",
             }}
             title={isBookmarked ? "Remove Bookmark" : "Save Case"}
             aria-label={isBookmarked ? "Remove Bookmark" : "Save Case"}

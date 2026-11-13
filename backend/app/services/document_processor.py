@@ -104,6 +104,8 @@ class DocumentProcessor:
         """Try pypdf first; fall back to Gemini OCR for scanned/image PDFs."""
         text = ""
         page_count = 0
+        has_embedded_images = False
+
         try:
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
@@ -112,15 +114,29 @@ class DocumentProcessor:
             for page in reader.pages:
                 pt = page.extract_text() or ""
                 pages_text.append(pt)
-            text = "\n\n".join(pages_text)
+                if not has_embedded_images and hasattr(page, "images") and len(page.images) > 0:
+                    has_embedded_images = True
+            text = "\n\n".join(pages_text).strip()
         except Exception as exc:
             logger.warning("pypdf_extraction_failed", error=str(exc))
 
-        # If fewer than 100 chars extracted, treat as scanned and use Gemini OCR
-        if len(text.strip()) < 100:
-            logger.info("pdf_appears_scanned_using_gemini_ocr")
-            from app.clients.gemini_client import gemini_client
-            text = await gemini_client.extract_markdown_from_pdf(pdf_bytes)
+        # Determine if the PDF is scanned / raster-only:
+        # 1. Very short total text (< 120 chars)
+        # 2. Low text density per page (< 90 chars/page on average, indicating watermarks or page headers on scanned pages)
+        # 3. Embedded page images combined with low text density
+        avg_density = (len(text) / page_count) if page_count > 0 else 0
+        is_scanned = (len(text) < 120) or (page_count > 0 and avg_density < 90) or (has_embedded_images and avg_density < 180)
+
+        if is_scanned:
+            logger.info("pdf_appears_scanned_using_gemini_ocr", page_count=page_count, avg_density=avg_density)
+            try:
+                from app.clients.gemini_client import gemini_client
+                ocr_text = await gemini_client.extract_markdown_from_pdf(pdf_bytes)
+                if ocr_text and len(ocr_text.strip()) > 30 and not ocr_text.startswith("*AI PDF extraction is unavailable"):
+                    text = ocr_text.strip()
+                    logger.info("pdf_scanned_ocr_transcription_success", chars_extracted=len(text))
+            except Exception as ocr_err:
+                logger.warning("pdf_scanned_ocr_failed", error=str(ocr_err))
 
         return text, page_count
 

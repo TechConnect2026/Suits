@@ -15,7 +15,7 @@ export default function BookmarksPage() {
     setLoading(true);
     try {
       const data = await bookmarkService.list();
-      setBookmarks(data);
+      setBookmarks(Array.isArray(data) ? data : []);
     } catch {
       toast.error("Failed to load bookmarks.");
     } finally {

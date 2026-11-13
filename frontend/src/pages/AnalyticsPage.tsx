@@ -97,22 +97,22 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Current Practice Streak"
-          value={`${data?.activity_trends.current_streak_days || 0} Days`}
+          value={`${data?.activity_trends?.current_streak_days ?? 0} Days`}
           icon={<Flame size={18} style={{ color: "#DC641E" }} />}
         />
         <MetricCard
           title="Statutes Analyzed"
-          value={data?.total_statutes_analyzed || 0}
+          value={data?.total_statutes_analyzed ?? 0}
           icon={<Scale size={18} style={{ color: "var(--brass)" }} />}
         />
         <MetricCard
           title="AI Legal Discussions"
-          value={data?.conversations || 0}
+          value={data?.conversations ?? 0}
           icon={<Activity size={18} style={{ color: "var(--seal-disposed)" }} />}
         />
         <MetricCard
           title="Case Searches Conducted"
-          value={data?.searches || 0}
+          value={data?.searches ?? 0}
           icon={<TrendingUp size={18} style={{ color: "var(--seal-reserved)" }} />}
         />
       </div>
@@ -130,12 +130,8 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {data && (
-          <>
-            <TopCitedActsCard statutes={data.top_cited_acts || []} />
-            <CourtDistributionCard distribution={data.court_distribution || []} />
-          </>
-        )}
+        <TopCitedActsCard statutes={data?.top_cited_acts || []} />
+        <CourtDistributionCard distribution={data?.court_distribution || []} />
       </div>
     </div>
   );
