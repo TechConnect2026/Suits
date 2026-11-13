@@ -90,20 +90,26 @@ jobs:
             docker compose -f docker-compose.ec2.yml pull redis backend || true
             docker compose -f docker-compose.ec2.yml pull frontend || true
             docker compose -f docker-compose.ec2.yml up -d --remove-orphans
+            docker compose -f docker-compose.ec2.yml up -d --force-recreate backend
             docker exec suits_caddy caddy reload --config /etc/caddy/Caddyfile || docker compose -f docker-compose.ec2.yml up -d --force-recreate caddy
-            docker image prune -f
 
             echo "Waiting for backend /api/health..."
-            for i in $(seq 1 15); do
+            for i in $(seq 1 25); do
               if curl -fsS http://127.0.0.1:8000/api/health; then
                 echo ""
                 echo "Backend is healthy!"
+                docker image prune -f
                 exit 0
               fi
+              echo "Waiting for backend startup (attempt $i/25)..."
               sleep 3
             done
-            echo "Backend health check timed out; showing recent logs:"
-            docker compose -f docker-compose.ec2.yml logs --tail=50 backend
+            echo "Backend health check timed out; showing container status & logs:"
+            docker ps -a
+            echo "=== docker logs suits_backend ==="
+            docker logs suits_backend --tail=100 || true
+            echo "=== docker compose logs backend ==="
+            docker compose -f docker-compose.ec2.yml logs --tail=100 backend || true
             exit 1
           EOF
 
