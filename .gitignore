@@ -234,8 +234,10 @@ frontend/dist/
 frontend/node_modules/
 
 # Runtime data & uploads
-data/
+/data/
 backend/data/uploads/*
 !backend/data/uploads/.gitkeep
 backend/data/pdf_cache/*
 !backend/data/pdf_cache/.gitkeep
+!backend/app/data/**
+backend/app/data/**/__pycache__/

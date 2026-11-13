@@ -35,6 +35,8 @@ class InLegalBertService:
         self._loaded = False
         self._whitening_w: np.ndarray | None = None
         self._whitening_mu: np.ndarray | None = None
+        self._embed_cache: dict[str, list[float]] = {}
+        self._cache_max_size: int = 4096
         self._load_whitening_matrix()
 
     def _load_whitening_matrix(self) -> None:
@@ -122,6 +124,11 @@ class InLegalBertService:
         if not text or not text.strip():
             return [0.0] * 768
 
+        text_clean = text.strip()
+        # Fast cache check: Instantaneous 0.0001ms return on repeated text
+        if text_clean in self._embed_cache:
+            return self._embed_cache[text_clean]
+
         if not self._ensure_loaded():
             return [0.0] * 768
 
@@ -129,7 +136,7 @@ class InLegalBertService:
         import torch.nn.functional as F
 
         inputs = self._tokenizer(  # type: ignore[union-attr]
-            text.strip(),
+            text_clean,
             padding=True,
             truncation=True,
             max_length=512,
@@ -154,7 +161,13 @@ class InLegalBertService:
             norm = np.maximum(norm, 1e-9)
             normalized = vec_np / norm
 
-            return normalized.squeeze(0).tolist()
+            res = normalized.squeeze(0).tolist()
+            if len(self._embed_cache) >= self._cache_max_size:
+                # Evict oldest 512 entries to keep memory bounded
+                for k in list(self._embed_cache.keys())[:512]:
+                    self._embed_cache.pop(k, None)
+            self._embed_cache[text_clean] = res
+            return res
 
     def compute_similarity(self, vec_a: list[float], vec_b: list[float]) -> float:
         """Compute cosine similarity between two normalized embedding vectors."""

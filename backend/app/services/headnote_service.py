@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -66,6 +67,11 @@ _DISPOSITION_ANCHORS = [
 ]
 
 
+ANCHOR_CENTROIDS_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "data", "rhetorical_anchor_centroids.npz"
+)
+
+
 class HeadnoteService:
     """Orchestrates rhetorical role segmentation and publisher-grade headnote synthesis."""
 
@@ -79,6 +85,20 @@ class HeadnoteService:
         """Lazy-load and precompute Mode 1 whitened rhetorical anchor centroids."""
         if self._anchor_vectors is not None:
             return self._anchor_vectors
+
+        # Fast loading from precomputed disk cache (< 1ms)
+        if os.path.exists(ANCHOR_CENTROIDS_PATH):
+            try:
+                npz = np.load(ANCHOR_CENTROIDS_PATH)
+                self._anchor_vectors = {
+                    "ratio": npz["ratio"],
+                    "argument": npz["argument"],
+                    "disposition": npz["disposition"],
+                }
+                logger.info("loaded_cached_anchor_centroids", path=ANCHOR_CENTROIDS_PATH)
+                return self._anchor_vectors
+            except Exception as exc:
+                logger.warning("failed_loading_cached_anchor_centroids", error=str(exc))
 
         def _mean_centroid(texts: list[str]) -> np.ndarray:
             vecs = [inlegal_bert_service.embed_text(t) for t in texts]
