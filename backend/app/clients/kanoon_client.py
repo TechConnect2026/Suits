@@ -223,44 +223,47 @@ class KanoonClient:
         return result if isinstance(result, dict) else {}
 
     async def get_orig_doc_bytes(self, tid: str | int) -> bytes | None:
-        """Fetch the original court copy (PDF) as bytes with fast timeouts."""
+        """Fetch the original court copy (PDF) as bytes.
+
+        Tries:
+        1. Enterprise Indian Kanoon /origdoc/{tid}/ API endpoint (if token configured)
+        2. Public Indian Kanoon PDF rendering service (https://indiankanoon.org/doc/{tid}/?type=pdf)
+        """
         logger.info("kanoon_get_origdoc", tid=tid)
-        client = await self._get_client()
+
+        # 1. Check official enterprise origdoc API if an API token is provided
+        if self.api_token and self.api_token != "your-kanoon-api-token-here":
+            try:
+                client = await self._get_client()
+                headers = dict(client.headers)
+                headers["Accept"] = "*/*"
+                response = await client.post(f"/origdoc/{tid}/", headers=headers, timeout=httpx.Timeout(4.0))
+                if response.status_code == 200 and response.content.startswith(b'%PDF-'):
+                    return response.content
+            except Exception as orig_exc:
+                logger.info("kanoon_origdoc_api_skipped", tid=tid, error=str(orig_exc))
+
+        # 2. Universal Indian Kanoon Public PDF Generator (fast, works for all judgments)
         try:
-            headers = dict(client.headers)
-            headers["Accept"] = "*/*"
-            
-            # Fast timeout for origdoc check
-            response = await client.post(f"/origdoc/{tid}/", headers=headers, timeout=httpx.Timeout(4.0))
-            if response.status_code == 200:
-                content = response.content
-                if content.startswith(b'%PDF-'):
-                    return content
+            async with httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=httpx.Timeout(15.0),
+            ) as public_client:
+                pdf_resp = await public_client.get(
+                    f"https://indiankanoon.org/doc/{tid}/?type=pdf",
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                        "Referer": f"https://indiankanoon.org/doc/{tid}/",
+                        "Origin": "https://indiankanoon.org",
+                        "Accept": "application/pdf,*/*",
+                    },
+                )
+                if pdf_resp.status_code == 200 and b'%PDF-' in pdf_resp.content[:1024]:
+                    logger.info("kanoon_public_pdf_fetched", tid=tid, size=len(pdf_resp.content))
+                    return pdf_resp.content
+        except Exception as fallback_exc:
+            logger.warning("kanoon_origdoc_generator_failed", tid=tid, error=str(fallback_exc))
 
-                # API returned HTML — try public PDF generator with fast timeout
-                logger.info("kanoon_origdoc_is_html_falling_back_to_generator", tid=tid)
-                try:
-                    async with httpx.AsyncClient(
-                        follow_redirects=True,
-                        timeout=httpx.Timeout(4.0),
-                    ) as public_client:
-                        pdf_resp = await public_client.get(
-                            f"https://indiankanoon.org/doc/{tid}/?type=pdf",
-                            headers={
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                                "Referer": f"https://indiankanoon.org/doc/{tid}/",
-                                "Origin": "https://indiankanoon.org",
-                                "Accept": "application/pdf,*/*",
-                            },
-                        )
-                        if pdf_resp.status_code == 200 and b'%PDF-' in pdf_resp.content[:1024]:
-                            return pdf_resp.content
-                except Exception as fallback_exc:
-                    logger.warning("kanoon_origdoc_generator_failed", tid=tid, error=str(fallback_exc))
-
-            return None
-        except Exception as exc:
-            logger.warning("kanoon_origdoc_unavailable", tid=tid, error=str(exc))
-            return None
+        return None
 
 kanoon_client = KanoonClient()
