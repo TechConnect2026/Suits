@@ -91,7 +91,8 @@ jobs:
 
             export FRONTEND_IMAGE
             docker compose -f docker-compose.ec2.yml pull frontend
-            docker compose -f docker-compose.ec2.yml up -d --remove-orphans frontend caddy
+            docker compose -f docker-compose.ec2.yml up -d --remove-orphans frontend
+            docker exec suits_caddy caddy reload --config /etc/caddy/Caddyfile || docker compose -f docker-compose.ec2.yml up -d --force-recreate caddy
             docker image prune -f
 
             echo "Waiting for frontend web server..."
