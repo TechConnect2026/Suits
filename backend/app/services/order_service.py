@@ -261,12 +261,12 @@ class OrderService:
         if cnr_url_match:
             return cnr_url_match.group(1)
 
-        # 2. Check if filename or CNR is explicitly a Kanoon doc ID (e.g. "doc_29724830", "doc-29724830", "193792759.pdf")
-        doc_match = _re.match(r'^(?:doc[_-])?(\d{4,12})(?:\.(?:pdf|html|txt))?$', filename_clean, _re.IGNORECASE)
+        # 2. Check if filename or CNR is explicitly a Kanoon doc ID (e.g. "doc_29724830", "interim-193792759.pdf", "193792759.pdf")
+        doc_match = _re.match(r'^(?:doc[_-]|interim[_-]|order[_-])?(\d{4,12})(?:\.(?:pdf|html|txt))?$', filename_clean, _re.IGNORECASE)
         if doc_match:
             return doc_match.group(1)
 
-        cnr_match = _re.match(r'^(?:doc[_-])?(\d{4,12})(?:\.(?:pdf|html|txt))?$', cnr_clean, _re.IGNORECASE)
+        cnr_match = _re.match(r'^(?:doc[_-]|interim[_-]|order[_-])?(\d{4,12})(?:\.(?:pdf|html|txt))?$', cnr_clean, _re.IGNORECASE)
         if cnr_match:
             return cnr_match.group(1)
 

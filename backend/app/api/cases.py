@@ -3,7 +3,7 @@
 import re
 from fastapi import APIRouter
 
-from app.dependencies.auth import CurrentUser, DbSession
+from app.dependencies.auth import CurrentUser, OptionalUser, DbSession
 from app.schemas.case import CaseDetailsResponse, RefreshResponse
 from app.schemas.citation import CitationGraphResponse
 from app.schemas.similar_case import SimilarCasesResponse
@@ -56,15 +56,16 @@ async def get_cause_list(court_code: str, date: str, user: CurrentUser):
 # --- Dynamic CNR routes ---
 
 @router.get("/{cnr}", response_model=APIResponse[CaseDetailsResponse])
-async def get_case_details(cnr: str, user: CurrentUser, db: DbSession):
+async def get_case_details(cnr: str, user: OptionalUser, db: DbSession):
     cnr = _validate_cnr(cnr)
     service = CaseService(db)
-    case = await service.get_case_details(cnr, user_id=user.id)
+    user_id = user.id if user else None
+    case = await service.get_case_details(cnr, user_id=user_id)
     return APIResponse(data=case)
 
 
 @router.get("/{cnr}/citation-graph", response_model=APIResponse[CitationGraphResponse])
-async def get_citation_graph(cnr: str, user: CurrentUser, db: DbSession):
+async def get_citation_graph(cnr: str, user: OptionalUser, db: DbSession):
     """Retrieve 2D citation network topology and precedent scoring for a case."""
     cnr = _validate_cnr(cnr)
     service = CitationService(db)
@@ -74,7 +75,7 @@ async def get_citation_graph(cnr: str, user: CurrentUser, db: DbSession):
 
 @router.get("/{cnr}/similar-cases", response_model=APIResponse[SimilarCasesResponse])
 @router.get("/{cnr}/similar", response_model=APIResponse[SimilarCasesResponse])
-async def get_similar_cases(cnr: str, user: CurrentUser, db: DbSession, synthesize: bool = False):
+async def get_similar_cases(cnr: str, user: OptionalUser, db: DbSession, synthesize: bool = False):
     """Retrieve legally analogous cases and precedents using Hybrid RAG."""
     cnr = _validate_cnr(cnr)
     service = SimilarCasesService(db)

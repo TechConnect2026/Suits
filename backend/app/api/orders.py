@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from fastapi.responses import Response
 
-from app.dependencies.auth import CurrentUser, DbSession
+from app.dependencies.auth import OptionalUser, DbSession
 from app.schemas.order import OrderMarkdownResponse, OrderAIResponse
 from app.schemas.common import APIResponse
 from app.services.order_service import OrderService
@@ -12,21 +12,21 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
 @router.get("/{cnr}/markdown/{filename:path}", response_model=APIResponse[OrderMarkdownResponse])
-async def get_order_markdown(cnr: str, filename: str, user: CurrentUser, db: DbSession):
+async def get_order_markdown(cnr: str, filename: str, user: OptionalUser, db: DbSession):
     service = OrderService(db)
     result = await service.get_markdown(cnr, filename)
     return APIResponse(data=result)
 
 
 @router.get("/{cnr}/ai/{filename:path}", response_model=APIResponse[OrderAIResponse])
-async def get_order_ai(cnr: str, filename: str, user: CurrentUser, db: DbSession):
+async def get_order_ai(cnr: str, filename: str, user: OptionalUser, db: DbSession):
     service = OrderService(db)
     result = await service.get_ai_analysis(cnr, filename)
     return APIResponse(data=result)
 
 
 @router.get("/{cnr}/download/{filename:path}")
-async def download_order_pdf(cnr: str, filename: str, user: CurrentUser, db: DbSession):
+async def download_order_pdf(cnr: str, filename: str, user: OptionalUser, db: DbSession):
     """Download the original court order PDF."""
     from fastapi import HTTPException
     service = OrderService(db)
