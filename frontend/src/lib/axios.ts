@@ -19,6 +19,15 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    // When sending FormData, delete default Content-Type so Axios & browser generate multipart/form-data with proper boundary
+    if (config.data instanceof FormData && config.headers) {
+      if (typeof config.headers.delete === "function") {
+        config.headers.delete("Content-Type");
+      } else {
+        delete config.headers["Content-Type"];
+      }
+    }
+
     // Attach active AI provider header
     try {
       const effective = useAIModeStore.getState().getEffectiveProvider();

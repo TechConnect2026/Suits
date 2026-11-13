@@ -62,10 +62,18 @@ async def upload_document(
     db: DbSession,
     file: UploadFile = File(...),
     cnr: Optional[str] = Form(default=None),
-    tag: DocumentTag = Form(default=DocumentTag.OTHER),
+    tag: str = Form(default="other"),
 ):
     """Upload a legal document. Processing (OCR + embedding) happens asynchronously in background."""
     content_type = file.content_type or "application/octet-stream"
+
+    # Safely resolve tag to enum
+    try:
+        parsed_tag = DocumentTag(tag.lower().strip()) if tag else DocumentTag.OTHER
+    except ValueError:
+        parsed_tag = DocumentTag.OTHER
+
+    clean_cnr = cnr.strip() if cnr and cnr.strip() else None
 
     # Read file into memory for validation
     file_data = await file.read()
@@ -87,13 +95,13 @@ async def upload_document(
     # Create database record (status=PENDING)
     doc = UserDocument(
         user_id=user.id,
-        cnr=cnr or None,
+        cnr=clean_cnr,
         filename=file_path.name,
         original_filename=file.filename or "upload",
         file_path=str(file_path),
         file_size=file_size,
         mime_type=content_type,
-        tag=tag,
+        tag=parsed_tag,
         status=DocumentStatus.PENDING,
         content_hash=content_hash,
     )

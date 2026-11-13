@@ -20,8 +20,10 @@ export const documentService = {
   ): Promise<UserDocument> => {
     const formData = new FormData();
     formData.append("file", file);
-    if (options.cnr) formData.append("cnr", options.cnr);
-    if (options.tag) formData.append("tag", options.tag);
+    if (options.cnr && options.cnr.trim()) {
+      formData.append("cnr", options.cnr.trim());
+    }
+    formData.append("tag", options.tag || "other");
 
     const res = await api.post<APIResponse<UserDocument>>("/documents/upload", formData, {
       onUploadProgress: (e) => {
