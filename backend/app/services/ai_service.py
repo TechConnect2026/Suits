@@ -1,5 +1,6 @@
 """AI service - manages AI chat, prompt building, and conversation memory using Indian Kanoon records."""
 
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncGenerator
@@ -14,7 +15,11 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.cache_repository import CacheRepository
 from app.schemas.chat import ChatResponse
 from app.services.cache_service import cache_service
-from app.prompts.system import MASTER_SYSTEM_PROMPT
+from app.prompts.system import (
+    MASTER_SYSTEM_PROMPT,
+    STANDARD_NON_LEGAL_REFUSAL,
+    is_blatant_non_legal_query,
+)
 from app.prompts.templates import build_case_context
 
 logger = structlog.get_logger()
@@ -124,8 +129,9 @@ class AIService:
 
         cnr = conversation.cnr
 
-        messages = await self.conversation_repo.get_messages(conversation_id, limit=20)
-        history = [{"role": m.role.value, "message": m.message} for m in messages]
+        messages = await self.conversation_repo.get_messages(conversation_id, limit=8)
+        # Cap to the last 4 turns to prevent cross-topic context bleed and prompt dilution
+        history = [{"role": m.role.value, "message": m.message} for m in messages][-4:]
 
         # For general (non-case) conversations, skip case/order context loading
         if not cnr or cnr.upper() == "GENERAL":
@@ -185,29 +191,52 @@ class AIService:
         )
         await self.conversation_repo.add_message(user_msg)
 
+        # Fast guard: immediately refuse blatant non-legal/off-topic requests
+        if is_blatant_non_legal_query(user_message):
+            assistant_msg = Message(
+                conversation_id=conversation_id,
+                role=MessageRole.ASSISTANT,
+                message=STANDARD_NON_LEGAL_REFUSAL,
+            )
+            await self.conversation_repo.add_message(assistant_msg)
+            return ChatResponse(
+                answer=STANDARD_NON_LEGAL_REFUSAL,
+                suggested_questions=[
+                    "What are the provisions for anticipatory bail under BNSS?",
+                    "How to file a special leave petition (SLP) in the Supreme Court?",
+                    "What are the grounds for dishonour of cheque under Section 138 NI Act?",
+                    "Explain the difference between Section 302 IPC and BNS Section 103.",
+                ],
+                sources=[],
+                conversation_id=conversation_id,
+            )
+
         # Determine if this is a general legal inquiry (no case context)
         is_general = not cnr or cnr.upper() == "GENERAL"
 
-        # RAG Precedent Search via Indian Kanoon API
+        # RAG Precedent Search via Indian Kanoon API (only for substantive legal inquiries)
         sources = [] if is_general else [f"Indian Kanoon Record: {cnr}"]
-        try:
-            from app.clients.kanoon_client import kanoon_client
-            kanoon_results = await kanoon_client.search_docs(query=user_message.strip(), pagenum=1)
-            docs = kanoon_results.get("docs", []) if isinstance(kanoon_results, dict) else []
-            if docs:
-                precedent_items = []
-                for d in docs[:3]:
-                    t_id = d.get("tid")
-                    t_title = d.get("title", "")
-                    import re
-                    t_title = re.sub(r'<[^>]+>', '', str(t_title))
-                    t_court = d.get("docsource", "Indian Kanoon")
-                    precedent_items.append(f"- **{t_title}** ({t_court}) [Kanoon TID: {t_id}]")
-                    sources.append(f"Indian Kanoon: {t_title} (ID: {t_id})")
-                if precedent_items:
-                    case_context = (case_context or "") + "\n\n### Relevant Indian Kanoon Legal Precedents & Citations:\n" + "\n".join(precedent_items)
-        except Exception:
-            pass
+        cleaned_msg = user_message.strip()
+        is_greeting = cleaned_msg.lower() in ("hi", "hello", "hey", "namaste", "good morning", "good afternoon", "good evening")
+        if not is_greeting and len(cleaned_msg) > 5 and not is_blatant_non_legal_query(cleaned_msg):
+            try:
+                from app.clients.kanoon_client import kanoon_client
+                kanoon_results = await kanoon_client.search_docs(query=cleaned_msg, pagenum=1)
+                docs = kanoon_results.get("docs", []) if isinstance(kanoon_results, dict) else []
+                if docs:
+                    precedent_items = []
+                    for d in docs[:3]:
+                        t_id = d.get("tid")
+                        t_title = d.get("title", "")
+                        import re
+                        t_title = re.sub(r'<[^>]+>', '', str(t_title))
+                        t_court = d.get("docsource", "Indian Kanoon")
+                        precedent_items.append(f"- **{t_title}** ({t_court}) [Kanoon TID: {t_id}]")
+                        sources.append(f"Indian Kanoon: {t_title} (ID: {t_id})")
+                    if precedent_items:
+                        case_context = (case_context or "") + "\n\n### Relevant Indian Kanoon Legal Precedents & Citations:\n" + "\n".join(precedent_items)
+            except Exception:
+                pass
 
         # Generate response via AI Orchestrator (Ollama Qwen 7B if local/offline, else Cloud AI)
         from app.services.ai_orchestrator import ai_orchestrator
@@ -263,6 +292,32 @@ class AIService:
                 message=user_message,
             )
             await self.conversation_repo.add_message(user_msg)
+
+            # Fast guard: immediately refuse blatant non-legal/off-topic requests
+            if is_blatant_non_legal_query(user_message):
+                assistant_msg = Message(
+                    conversation_id=conversation_id,
+                    role=MessageRole.ASSISTANT,
+                    message=STANDARD_NON_LEGAL_REFUSAL,
+                )
+                await self.conversation_repo.add_message(assistant_msg)
+
+                chunk_size = 20
+                for i in range(0, len(STANDARD_NON_LEGAL_REFUSAL), chunk_size):
+                    chunk = STANDARD_NON_LEGAL_REFUSAL[i:i + chunk_size]
+                    chunk_json = json.dumps({"token": chunk})
+                    yield f"data: {chunk_json}\n\n"
+                    await asyncio.sleep(0.01)
+
+                suggested = [
+                    "What are the provisions for anticipatory bail under BNSS?",
+                    "How to file a special leave petition (SLP) in the Supreme Court?",
+                    "What are the grounds for dishonour of cheque under Section 138 NI Act?",
+                    "Explain the difference between Section 302 IPC and BNS Section 103.",
+                ]
+                done_payload = json.dumps({"done": True, "suggested_questions": suggested})
+                yield f"data: {done_payload}\n\n"
+                return
 
             # Determine if this is a general legal inquiry
             is_general = not cnr or cnr.upper() == "GENERAL"

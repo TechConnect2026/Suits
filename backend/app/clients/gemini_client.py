@@ -390,12 +390,13 @@ class GeminiClient:
 
         if conversation_history:
             history_text = "\n".join(
-                f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['message']}"
-                for m in conversation_history[-10:]
+                f"{'User' if m.get('role') == 'user' else 'Assistant'}: {m.get('message') or m.get('content', '')}"
+                for m in conversation_history[-4:]
             )
-            context_parts.append(f"## Conversation History\n{history_text}")
+            context_parts.append(f"## Conversation History (For Reference Only - treat current question as standalone)\n{history_text}")
 
-        context_parts.append(f"## Current Question\n{user_message}")
+        from app.prompts.system import TURN_LEVEL_DIRECTIVE
+        context_parts.append(f"## Current Question\n{user_message}\n\n---\n{TURN_LEVEL_DIRECTIVE}")
         context_parts.append(
             "## Response Instructions\n"
             "- Provide a comprehensive, detailed, and thorough legal analysis "
@@ -430,12 +431,13 @@ class GeminiClient:
 
         if conversation_history:
             history_text = "\n".join(
-                f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['message']}"
-                for m in conversation_history[-10:]
+                f"{'User' if m.get('role') == 'user' else 'Assistant'}: {m.get('message') or m.get('content', '')}"
+                for m in conversation_history[-4:]
             )
-            context_parts.append(f"## Conversation History\n{history_text}")
+            context_parts.append(f"## Conversation History (For Reference Only - treat current question as standalone)\n{history_text}")
 
-        context_parts.append(f"## Current Question\n{user_message}")
+        from app.prompts.system import TURN_LEVEL_DIRECTIVE
+        context_parts.append(f"## Current Question\n{user_message}\n\n---\n{TURN_LEVEL_DIRECTIVE}")
         context_parts.append(
             "## Response Instructions\n"
             "- Provide a comprehensive, detailed, and thorough legal analysis\n"

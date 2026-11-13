@@ -224,17 +224,25 @@ class OpenRouterClient:
         conversation_history: list[dict[str, str]],
         user_message: str,
     ) -> list[dict[str, Any]]:
+        from app.prompts.system import TURN_LEVEL_DIRECTIVE
+
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
             {"role": "system", "content": context_block},
         ]
-        for entry in conversation_history[-10:]:
+        # Keep only the last 4 turns (2 user-assistant rounds) to prevent context bleed
+        for entry in conversation_history[-4:]:
             role = entry.get("role", "user")
-            messages.append({
-                "role": "user" if role == "user" else "assistant",
-                "content": entry.get("message", ""),
-            })
-        messages.append({"role": "user", "content": user_message})
+            content = entry.get("message") or entry.get("content") or ""
+            if content.strip():
+                messages.append({
+                    "role": "user" if role == "user" else "assistant",
+                    "content": content,
+                })
+
+        # Recency Anchoring: Inject TURN_LEVEL_DIRECTIVE on every single turn
+        anchored_user_message = f"{user_message}\n\n---\n{TURN_LEVEL_DIRECTIVE}"
+        messages.append({"role": "user", "content": anchored_user_message})
         return messages
 
     # ------------------------------------------------------------------

@@ -19,6 +19,7 @@ from app.schemas.document import (
 )
 from app.schemas.order import OrderAIResponse
 from app.schemas.common import APIResponse
+from app.prompts.system import STANDARD_NON_LEGAL_REFUSAL, is_blatant_non_legal_query
 from app.services.document_processor import DocumentProcessor, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES
 
 logger = structlog.get_logger()
@@ -260,6 +261,27 @@ async def chat_with_document(
         raise HTTPException(status_code=404, detail="Document not found.")
     if doc.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied.")
+
+    # Fast guard: immediately refuse blatant non-legal/off-topic requests
+    if is_blatant_non_legal_query(request.message):
+        async def refusal_generator():
+            chunk_size = 20
+            for i in range(0, len(STANDARD_NON_LEGAL_REFUSAL), chunk_size):
+                chunk = STANDARD_NON_LEGAL_REFUSAL[i:i + chunk_size]
+                payload = json.dumps({"token": chunk})
+                yield f"data: {payload}\n\n"
+                await asyncio.sleep(0.01)
+            yield f"data: {json.dumps({'done': True, 'sources': []})}\n\n"
+
+        return StreamingResponse(
+            refusal_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     doc_context = (
         f"--- USER UPLOADED LEGAL DOCUMENT: {doc.original_filename} ---\n"
