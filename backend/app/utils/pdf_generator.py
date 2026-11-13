@@ -143,3 +143,4 @@ def synthesize_court_pdf(
             pdf.multi_cell(0, 4.6, clean)
 
     return bytes(pdf.output())
+
