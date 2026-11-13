@@ -10,13 +10,8 @@
         }
     }
 
-    # Ensure .mjs and .js modules have strict JavaScript MIME type
-    @mjs path *.mjs
-    header @mjs Content-Type "application/javascript; charset=utf-8"
-
     # Route all web app traffic, SPA routing, and static assets to Frontend Nginx
     handle {
         reverse_proxy frontend:80
     }
 }
-

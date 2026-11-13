@@ -68,15 +68,15 @@ jobs:
           printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
 
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" "mkdir -p ~/suits"
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key docker-compose.ec2.yml Caddyfile deploy/ec2-setup.sh "${EC2_USER}@${EC2_HOST}:~/suits/"
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=60 -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" "mkdir -p ~/suits"
+          scp -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=60 -i ~/.ssh/ec2_key docker-compose.ec2.yml Caddyfile deploy/ec2-setup.sh "${EC2_USER}@${EC2_HOST}:~/suits/"
 
           if [ -n "$GHCR_PAT" ]; then
-            printf '%s\n' "$GHCR_PAT" | ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" \
+            printf '%s\n' "$GHCR_PAT" | ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=60 -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" \
               "docker login ghcr.io -u '${GHCR_USER}' --password-stdin"
           fi
 
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" \
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=60 -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" \
             "BACKEND_IMAGE='${BACKEND_IMAGE}' bash -s" << 'EOF'
             set -euo pipefail
             cd ~/suits
@@ -87,6 +87,8 @@ jobs:
             fi
 
             export BACKEND_IMAGE
+            # Free unused cache and orphaned layers before pulling heavy images
+            docker system prune -f || true
             docker compose -f docker-compose.ec2.yml pull redis backend || true
             docker compose -f docker-compose.ec2.yml pull frontend || true
 
