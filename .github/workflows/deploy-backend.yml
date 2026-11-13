@@ -89,8 +89,12 @@ jobs:
             export BACKEND_IMAGE
             docker compose -f docker-compose.ec2.yml pull redis backend || true
             docker compose -f docker-compose.ec2.yml pull frontend || true
+
+            # Clean up any conflicting or stuck backend containers from interrupted deploys
+            docker rm -f suits_backend 2>/dev/null || true
+            docker container prune -f || true
+
             docker compose -f docker-compose.ec2.yml up -d --remove-orphans
-            docker compose -f docker-compose.ec2.yml up -d --force-recreate backend
             docker exec suits_caddy caddy reload --config /etc/caddy/Caddyfile || docker compose -f docker-compose.ec2.yml up -d --force-recreate caddy
 
             echo "Waiting for backend /api/health..."
