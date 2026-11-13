@@ -47,6 +47,24 @@ services:
       - suits_prod_net
 
   # -------------------------------------------------------------
+  # SUITS Vite + React Frontend SPA (~15 MB RAM)
+  # -------------------------------------------------------------
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/techconnect2026/suits-frontend:latest}
+    container_name: suits_frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - suits_prod_net
+
+  # -------------------------------------------------------------
   # Caddy Reverse Proxy (Automatic Let's Encrypt HTTPS, $0 ALB)
   # -------------------------------------------------------------
   caddy:
@@ -55,6 +73,7 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+      - frontend
     environment:
       API_DOMAIN: ${API_DOMAIN:-http://:80}
     ports:

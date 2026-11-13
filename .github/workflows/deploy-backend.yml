@@ -87,8 +87,10 @@ jobs:
             fi
 
             export BACKEND_IMAGE
-            docker compose -f docker-compose.ec2.yml pull
+            docker compose -f docker-compose.ec2.yml pull redis backend || true
+            docker compose -f docker-compose.ec2.yml pull frontend || true
             docker compose -f docker-compose.ec2.yml up -d --remove-orphans
+            docker exec suits_caddy caddy reload --config /etc/caddy/Caddyfile || docker compose -f docker-compose.ec2.yml up -d --force-recreate caddy
             docker image prune -f
 
             echo "Waiting for backend /api/health..."
