@@ -31,7 +31,7 @@ class CourtRecordPDF(FPDF):
         self.doc_cnr = sanitize_for_pdf(cnr)
 
     def header(self):
-        self.set_font("Helvetica", "B", 8)
+        self.set_font("Times", "B", 8.5)
         self.set_text_color(100, 100, 100)
         top_bar = f"{self.doc_court.upper()}  |  {self.doc_title}" if self.doc_court else self.doc_title
         self.cell(0, 5, top_bar[:85], align="L")
@@ -47,7 +47,7 @@ class CourtRecordPDF(FPDF):
         self.set_line_width(0.2)
         self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
         self.ln(2)
-        self.set_font("Helvetica", "I", 7.5)
+        self.set_font("Times", "I", 8)
         self.set_text_color(130, 130, 130)
         self.cell(0, 5, f"Page {self.page_no()}/{{nb}}  --  Verified Legal Record Archive  |  SUITS", align="C")
 
@@ -202,7 +202,7 @@ def synthesize_court_pdf(
     pdf.add_page()
 
     # Front Matter Banner
-    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_font("Times", "B", 13)
     pdf.set_text_color(20, 20, 20)
     pdf.set_x(pdf.l_margin)
     court_heading = court_name.upper() if court_name else "IN THE COURT OF RECORD"
@@ -210,7 +210,7 @@ def synthesize_court_pdf(
     pdf.ln(2)
 
     if title and title != court_name:
-        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_font("Times", "B", 11)
         pdf.set_text_color(45, 45, 45)
         pdf.set_x(pdf.l_margin)
         pdf.multi_cell(0, 5.5, sanitize_for_pdf(title), align="C")
@@ -222,7 +222,7 @@ def synthesize_court_pdf(
             meta_items.append(f"Record / Case ID: {cnr}")
         if order_date:
             meta_items.append(f"Date: {order_date}")
-        pdf.set_font("Helvetica", "I", 8.5)
+        pdf.set_font("Times", "I", 9)
         pdf.set_text_color(110, 110, 110)
         pdf.set_x(pdf.l_margin)
         pdf.multi_cell(0, 4.5, sanitize_for_pdf("  |  ".join(meta_items)), align="C")
@@ -247,28 +247,28 @@ def synthesize_court_pdf(
 
         if btype == "court_banner":
             pdf.ln(1)
-            pdf.set_font("Helvetica", "B", 9.5)
+            pdf.set_font("Times", "B", 10.5)
             pdf.set_text_color(40, 40, 40)
             pdf.multi_cell(0, 5, clean, align="C")
             pdf.ln(1)
 
         elif btype == "judgment_title":
             pdf.ln(2)
-            pdf.set_font("Helvetica", "B", 11)
+            pdf.set_font("Times", "B", 12)
             pdf.set_text_color(20, 20, 20)
             pdf.multi_cell(0, 6, clean, align="C")
             pdf.ln(2)
 
         elif btype == "heading":
             pdf.ln(3)
-            pdf.set_font("Helvetica", "B", 10.5)
+            pdf.set_font("Times", "B", 11)
             pdf.set_text_color(25, 25, 25)
             pdf.multi_cell(0, 5.2, clean, align="L")
             pdf.ln(1.5)
 
         elif btype == "quote":
             pdf.set_x(pdf.l_margin + 6)
-            pdf.set_font("Helvetica", "I", 9)
+            pdf.set_font("Times", "I", 9.5)
             pdf.set_text_color(70, 70, 70)
             avail_w = (pdf.w - pdf.r_margin) - (pdf.l_margin + 6)
             pdf.multi_cell(avail_w, 4.8, clean, align="J")
@@ -276,7 +276,7 @@ def synthesize_court_pdf(
 
         elif btype == "list_item":
             pdf.set_x(pdf.l_margin + 4)
-            pdf.set_font("Helvetica", "", 9.5)
+            pdf.set_font("Times", "", 10)
             pdf.set_text_color(35, 35, 35)
             avail_w = (pdf.w - pdf.r_margin) - (pdf.l_margin + 4)
             pdf.multi_cell(avail_w, 4.8, f"* {clean}", align="J")
@@ -284,11 +284,11 @@ def synthesize_court_pdf(
 
         else:
             # Main reflowed legal paragraph
-            pdf.set_font("Helvetica", "", 10)
+            pdf.set_font("Times", "", 10.5)
             pdf.set_text_color(30, 30, 30)
             # Use justified alignment for paragraphs longer than 80 chars
             align_mode = "J" if len(clean) > 80 else "L"
-            pdf.multi_cell(0, 5.2, clean, align=align_mode)
+            pdf.multi_cell(0, 5.4, clean, align=align_mode)
             pdf.ln(3)
 
     # Render Digital Signatures in an authentic verification card at the end
@@ -305,12 +305,12 @@ def synthesize_court_pdf(
             
         pdf.rect(pdf.l_margin, start_y, pdf.w - pdf.l_margin - pdf.r_margin, 20, style="DF")
         pdf.set_xy(pdf.l_margin + 4, start_y + 2)
-        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_font("Times", "B", 8.5)
         pdf.set_text_color(110, 85, 40)
         pdf.cell(0, 4, "[VERIFIED DIGITAL RECORD]", ln=True)
         
         pdf.set_x(pdf.l_margin + 4)
-        pdf.set_font("Helvetica", "I", 7.5)
+        pdf.set_font("Times", "I", 8)
         pdf.set_text_color(90, 90, 90)
         sig_summary = "  |  ".join(" ".join(s.split()) for s in signatures)
         pdf.multi_cell(pdf.w - pdf.l_margin - pdf.r_margin - 8, 3.8, sanitize_for_pdf(sig_summary)[:240])

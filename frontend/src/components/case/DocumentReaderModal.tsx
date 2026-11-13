@@ -69,7 +69,7 @@ type FontFamily = "sans" | "serif";
 type FontSize = 14 | 16 | 18 | 20;
 
 // Client-side in-memory cache for instantaneous reopening of PDFs during a session
-const PDF_CACHE_VERSION = "v3";
+const PDF_CACHE_VERSION = "v5";
 const pdfBufferCache = new Map<string, ArrayBuffer>();
 const textCache = new Map<string, string>();
 
@@ -903,7 +903,7 @@ export function DocumentReaderModal({
                           </h2>
                         ),
                         p: ({ children }) => (
-                          <p className="mb-6 text-justify leading-relaxed whitespace-pre-line opacity-95">
+                          <p className="mb-6 text-justify leading-relaxed opacity-95">
                             {children}
                           </p>
                         ),

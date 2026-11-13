@@ -412,7 +412,10 @@ async def reprocess_document(
     if doc.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied.")
     if doc.status == DocumentStatus.PROCESSING:
-        raise HTTPException(status_code=409, detail="Document is already being processed.")
+        return APIResponse(
+            data=DocumentUploadResponse.model_validate(doc),
+            message="Document is already actively being processed.",
+        )
 
     doc.status = DocumentStatus.PENDING
     doc.error_message = None

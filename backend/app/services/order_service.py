@@ -320,7 +320,7 @@ class OrderService:
         def _ensure_clean_md(raw_md: str) -> str:
             if not raw_md:
                 return raw_md
-            if "signature not verified" in raw_md.lower() or "digitally signed by" in raw_md.lower() or "\x0c" in raw_md:
+            try:
                 from app.utils.kanoon_formatter import clean_court_text_and_extract_signatures, reflow_legal_markdown
                 cleaned, sigs = clean_court_text_and_extract_signatures(raw_md)
                 reflowed = reflow_legal_markdown(cleaned)
@@ -332,7 +332,8 @@ class OrderService:
                             reflowed += f"- **Date:** {s['date']}\n"
                         reflowed += f"- **Status:** {s['status']}\n"
                 return reflowed
-            return raw_md
+            except Exception:
+                return raw_md
 
         # 1. Check Redis cache (only accept valid content)
         cached = await cache_service.get(redis_key)
@@ -580,7 +581,7 @@ class OrderService:
         from pathlib import Path
         cache_dir = Path("./data/pdf_cache")
         cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_file = cache_dir / f"{tid}_v4.pdf"
+        cache_file = cache_dir / f"{tid}_v5.pdf"
 
         if cache_file.exists() and cache_file.stat().st_size > 100:
             logger.info("order_pdf_served_from_disk_cache", tid=tid, cnr=cnr)

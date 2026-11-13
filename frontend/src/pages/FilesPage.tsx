@@ -285,9 +285,11 @@ export default function FilesPage() {
       setDocuments(docs);
       setStats(st);
     } catch (err: any) {
-      if (err?.response?.status !== 401) {
-        toast.error("Failed to load documents.");
+      if (err?.response?.status === 401) {
+        pollCountRef.current = 999;
+        return;
       }
+      toast.error("Failed to load documents.");
     } finally {
       setLoading(false);
     }
@@ -359,7 +361,12 @@ export default function FilesPage() {
       toast.success("OCR & Extraction restarted.");
       loadData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to restart extraction.");
+      if (err?.response?.status === 409) {
+        toast.info("Document is actively being processed.");
+        loadData();
+      } else {
+        toast.error(err.response?.data?.message || err.response?.data?.detail || "Failed to restart extraction.");
+      }
     }
   };
 
