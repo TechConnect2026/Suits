@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage } from "@/types/chat";
 import { renderTextWithCitations } from "./CitationChip";
-import { ExportToDraftButton } from "./ExportToDraftButton";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -136,17 +135,11 @@ export function MessageBubble({ message, isStreaming = false }: MessageBubblePro
           </div>
         )}
         {!isStreaming && !isUser && (
-          <div
-            className="mt-2.5 pt-2 border-t flex items-center justify-between gap-2 flex-wrap"
-            style={{ borderColor: "var(--hairline-soft)" }}
-          >
-            <ExportToDraftButton content={message.message} />
-            <span className="text-[10px] opacity-50 font-mono">
-              {new Date(message.created_at).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
+          <div className="text-[10px] mt-1.5 text-right opacity-50 font-mono">
+            {new Date(message.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
           </div>
         )}
         {!isStreaming && isUser && (
