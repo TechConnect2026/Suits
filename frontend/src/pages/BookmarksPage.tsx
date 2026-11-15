@@ -58,15 +58,15 @@ export default function BookmarksPage() {
           icon={<Bookmark size={32} />}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 min-w-0">
           {bookmarks.map((b) => (
             <div
               key={b.id}
-              className="card-float group p-4 sm:p-6 flex flex-col justify-between gap-4 sm:gap-5 transition-all"
+              className="card-float group p-4 sm:p-6 flex flex-col justify-between gap-4 sm:gap-5 transition-all min-w-0 max-w-full overflow-hidden"
               style={{ borderRadius: "var(--radius-md)" }}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3.5 min-w-0">
+              <div className="flex items-start justify-between gap-4 min-w-0">
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
                   <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
                     style={{
@@ -77,24 +77,24 @@ export default function BookmarksPage() {
                   >
                     <Scale size={18} />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <Link
                       to={`/case/${b.cnr}`}
-                      className="text-base font-medium hover:underline line-clamp-2 block"
+                      className="text-base font-medium hover:underline line-clamp-2 block break-words"
                       style={{ color: "var(--ink)" }}
                     >
                       {b.title}
                     </Link>
                     <div
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[11px] mt-2"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[11px] mt-2 break-all max-w-full"
                       style={{
                         background: "var(--surface-container)",
                         color: "var(--ink-faint)",
                         border: "1px solid var(--hairline)",
                       }}
                     >
-                      <Hash size={11} />
-                      <span>CNR: {b.cnr}</span>
+                      <Hash size={11} className="flex-shrink-0" />
+                      <span className="truncate">CNR: {b.cnr}</span>
                     </div>
                   </div>
                 </div>

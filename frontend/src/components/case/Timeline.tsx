@@ -145,7 +145,7 @@ export function Timeline({ events }: TimelineProps) {
   };
 
   return (
-    <div className="card-float p-6 sm:p-8 rounded-2xl overflow-hidden">
+    <div className="card-float p-4 sm:p-8 rounded-2xl overflow-hidden min-w-0 max-w-full">
       {/* Controls Header */}
       <div className="flex items-center justify-between pb-5 mb-6 border-b" style={{ borderColor: "var(--border)" }}>
         <div className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
@@ -168,7 +168,7 @@ export function Timeline({ events }: TimelineProps) {
       </div>
 
       {/* Vertical Timeline Representation */}
-      <div className="relative pl-8 space-y-6 before:absolute before:left-[19px] before:top-4 before:bottom-4 before:w-px before:bg-[var(--border-strong)]">
+      <div className="relative pl-6 sm:pl-8 space-y-6 before:absolute before:left-[15px] sm:before:left-[19px] before:top-4 before:bottom-4 before:w-px before:bg-[var(--border-strong)]">
         {sortedEvents.map((event, idx) => {
           const dateInfo = formatDateDisplay(event.date);
           const rawType = event.event_type || "hearing";
@@ -176,7 +176,7 @@ export function Timeline({ events }: TimelineProps) {
             <div key={idx} className="relative group">
               {/* Node Icon on Connecting Line */}
               <div
-                className={`absolute -left-8 top-1 w-10 h-10 rounded-full flex items-center justify-center border-2 z-10 transition-transform group-hover:scale-105 ${getNodeColor(
+                className={`absolute -left-6 sm:-left-8 top-1 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border-2 z-10 transition-transform group-hover:scale-105 ${getNodeColor(
                   rawType
                 )}`}
                 style={{
@@ -187,7 +187,7 @@ export function Timeline({ events }: TimelineProps) {
               </div>
 
               {/* Event Content Card */}
-              <div className="card-float p-5 ml-4 rounded-xl transition-all group-hover:border-[var(--border-strong)]">
+              <div className="card-float p-3.5 sm:p-5 ml-3 sm:ml-4 rounded-xl transition-all group-hover:border-[var(--border-strong)] min-w-0 break-words">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <span

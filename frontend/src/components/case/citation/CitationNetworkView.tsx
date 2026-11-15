@@ -99,10 +99,10 @@ export function CitationNetworkView({
   }
 
   return (
-    <div ref={containerRef} className="space-y-4 relative">
+    <div ref={containerRef} className="space-y-4 relative min-w-0 max-w-full overflow-hidden">
       {/* Network Header & Authority Metric Summary */}
       <div
-        className="p-5 rounded-2xl border space-y-3"
+        className="p-4 sm:p-5 rounded-2xl border space-y-3 min-w-0 max-w-full overflow-hidden"
         style={{
           background: "var(--surface)",
           borderColor: "var(--hairline)",
@@ -120,7 +120,7 @@ export function CitationNetworkView({
           </div>
 
           {/* Quick Metrics Bar */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs overflow-x-auto scrollbar-none flex-nowrap max-w-full pb-1">
             {/* Precedents Relied Upon */}
             <div
               className="px-3 py-1.5 rounded-lg border font-mono flex items-center gap-1.5"

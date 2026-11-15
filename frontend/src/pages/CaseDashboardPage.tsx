@@ -481,7 +481,7 @@ export default function CaseDashboardPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto">
+    <div className="space-y-6 sm:space-y-8 w-full max-w-6xl mx-auto min-w-0 overflow-x-hidden">
       <CaseHeader
         caseData={caseData}
         isBookmarked={isBookmarked}

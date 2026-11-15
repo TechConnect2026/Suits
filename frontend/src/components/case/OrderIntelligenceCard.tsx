@@ -262,7 +262,7 @@ export function OrderIntelligenceCard({
   return (
     <div
       id="order-intelligence-section"
-      className="card-float p-6 sm:p-8 space-y-6 relative overflow-hidden"
+      className="card-float p-4 sm:p-8 space-y-6 relative overflow-hidden min-w-0 max-w-full"
       style={{ borderRadius: "var(--radius-md)" }}
     >
       {/* ── Header ────────────────────────────────────────────────────────────── */}
@@ -287,7 +287,7 @@ export function OrderIntelligenceCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-nowrap max-w-full pb-1">
           {/* Reading Text Size Controls */}
           <div
             className="flex items-center rounded-lg border p-1 gap-1"
@@ -375,9 +375,9 @@ export function OrderIntelligenceCard({
       </div>
 
       {/* ── Metadata Banner ───────────────────────────────────────────────────── */}
-      <div className="p-5 rounded-xl border space-y-4" style={{ background: "var(--surface)", borderColor: "var(--hairline)" }}>
+      <div className="p-4 sm:p-5 rounded-xl border space-y-4 min-w-0 max-w-full overflow-hidden" style={{ background: "var(--surface)", borderColor: "var(--hairline)" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h4 className="text-base sm:text-lg font-semibold tracking-tight" style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}>
+          <h4 className="text-base sm:text-lg font-semibold tracking-tight break-words" style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}>
             {caseTitle}
           </h4>
           {operativeDisposition && operativeDisposition.length <= 40 ? (
@@ -413,8 +413,8 @@ export function OrderIntelligenceCard({
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 border-t" style={{ borderColor: "var(--hairline-soft)" }}>
-          <div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 pt-3 border-t min-w-0" style={{ borderColor: "var(--hairline-soft)" }}>
+          <div className="min-w-0 break-words">
             <span className="block font-bold uppercase tracking-wider text-xs" style={{ color: "var(--ink-faint)", fontFamily: "var(--font-mono)" }}>
               Court & Case No.
             </span>
@@ -422,7 +422,7 @@ export function OrderIntelligenceCard({
               {courtName} • {caseNo}
             </span>
           </div>
-          <div>
+          <div className="min-w-0 break-all">
             <span className="block font-bold uppercase tracking-wider text-xs" style={{ color: "var(--ink-faint)", fontFamily: "var(--font-mono)" }}>
               CNR Number
             </span>
@@ -430,7 +430,7 @@ export function OrderIntelligenceCard({
               {cnr || "Unavailable"}
             </span>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="block font-bold uppercase tracking-wider text-xs" style={{ color: "var(--ink-faint)", fontFamily: "var(--font-mono)" }}>
               Order / Date
             </span>
@@ -438,7 +438,7 @@ export function OrderIntelligenceCard({
               {orderDate}
             </span>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="block font-bold uppercase tracking-wider text-xs" style={{ color: "var(--ink-faint)", fontFamily: "var(--font-mono)" }}>
               Bench / Judges
             </span>
@@ -450,15 +450,15 @@ export function OrderIntelligenceCard({
       </div>
 
       {/* ── Tab Switcher (Segmented Pill) ────────────────────────────────────── */}
-      <div className="p-1 rounded-lg border w-full" style={{ background: "var(--surface)", borderColor: "var(--hairline)" }}>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 w-full">
+      <div className="p-1 rounded-lg border w-full min-w-0 max-w-full overflow-hidden" style={{ background: "var(--surface)", borderColor: "var(--hairline)" }}>
+        <div className="flex sm:grid sm:grid-cols-6 gap-1 overflow-x-auto scrollbar-none flex-nowrap sm:flex-wrap w-full pb-1 sm:pb-0">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className="relative px-3 py-2.5 rounded-md text-xs sm:text-sm font-medium transition-all cursor-pointer select-none flex items-center justify-center gap-1.5 outline-none text-center"
+                className="relative px-3 py-2.5 rounded-md text-xs sm:text-sm font-medium transition-all cursor-pointer select-none flex items-center justify-center gap-1.5 outline-none text-center flex-shrink-0 sm:flex-shrink whitespace-nowrap sm:whitespace-normal"
               >
                 {isActive && (
                   <motion.div
