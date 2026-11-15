@@ -986,10 +986,10 @@ export function DocumentReaderModal({
           )}
 
           {/* Floating AI Chat Assistant Card */}
-          <div className="absolute bottom-6 right-6 z-50 flex flex-col items-end pointer-events-auto select-none">
+          <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 flex flex-col items-end pointer-events-auto select-none">
             {isChatOpen && (
               <div
-                className="mb-3 w-[410px] sm:w-[430px] h-[580px] max-h-[78vh] flex flex-col rounded-2xl overflow-hidden animate-slide-up shadow-2xl border overscroll-contain select-text"
+                className="mb-3 w-[calc(100vw-28px)] sm:w-[430px] h-[580px] max-h-[78vh] flex flex-col rounded-2xl overflow-hidden animate-slide-up shadow-2xl border overscroll-contain select-text"
                 style={{
                   borderColor: "var(--border)",
                   background: "var(--card)",

@@ -383,12 +383,12 @@ export default function FilesPage() {
   };
 
   return (
-    <div className="dashboard-layout" style={{ maxWidth: "1150px", margin: "0 auto", padding: "28px 24px 60px" }}>
+    <div className="dashboard-layout max-w-[1150px] mx-auto p-3 sm:p-6 pb-16">
       {/* Page Header */}
-      <div className="flex items-start justify-between mb-7 gap-4 flex-wrap">
+      <div className="flex items-start justify-between mb-5 sm:mb-7 gap-4 flex-wrap">
         <div>
           <h1
-            className="text-2xl font-semibold"
+            className="text-xl sm:text-2xl font-semibold"
             style={{ color: "var(--ink)", fontFamily: "var(--font-display)", margin: 0, lineHeight: 1.2 }}
           >
             Evidence & Document Vault
@@ -409,7 +409,7 @@ export default function FilesPage() {
 
       {/* Stats Row */}
       {stats && (
-        <div className="grid grid-cols-3 gap-4 mb-7">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5 sm:mb-7">
           {[
             { label: "Total Documents", value: stats.total_documents },
             { label: "AI Analyzed & Ready", value: stats.indexed_documents },

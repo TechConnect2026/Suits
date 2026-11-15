@@ -56,7 +56,7 @@ export function TopSearchBar() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by party name, advocate, judge, CNR, or keyword…"
+          placeholder="Search cases, party, advocate, judge, CNR…"
           className="top-search-input"
         />
         {query && (

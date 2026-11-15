@@ -1,8 +1,9 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Sun, Moon } from "lucide-react";
-import { motion } from "motion/react";
+import { Sun, Moon, X } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { useAuthStore } from "@/store/auth-store";
 import { useThemeStore } from "@/store/theme-store";
+import { useSidebarStore } from "@/store/sidebar-store";
 
 // SVG icons matching the reference design (stroke-based, 18×18)
 function WorkspaceIcon() {
@@ -108,88 +109,155 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
+  const { isMobileOpen, closeMobile } = useSidebarStore();
   const isDark = theme === "dark";
 
-  return (
-    <aside className="sidebar">
-      {/* Logo + Nav grouped at top */}
-      <div className="sidebar-top">
-        <div className="wordmark">
-          <ScalesIcon />
-          <span className="mark">SUITS</span>
-        </div>
-
-        {/* Nav */}
-        <nav className="sidebar-nav">
-          <div className="flex flex-col gap-1">
-            {navItems.map(({ path, label, Icon }) => {
-              const isActive =
-                location.pathname === path ||
-                (path !== "/dashboard" && location.pathname.startsWith(path));
-              return (
-                <Link
-                  key={path}
-                  to={path}
-                  className={`nav-item${isActive ? " active" : ""}`}
-                  title={label}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="sidebar-active-pill"
-                      className="nav-item-active-pill"
-                      transition={{
-                        type: "spring",
-                        stiffness: 380,
-                        damping: 28,
-                        mass: 0.7,
-                      }}
-                    />
-                  )}
-                  <span className="nav-item-inner">
-                    <Icon />
-                    <span className="nav-label">{label}</span>
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-      </div>
-
-      {/* Footer: Clean Profile pill → /profile + Theme toggle */}
-      <div className="sidebar-foot">
-        <div className="sidebar-foot-row">
-          {/* Clicking anywhere on the pill goes to /profile */}
-          <button
-            onClick={() => navigate("/profile")}
-            className="sidebar-profile-btn"
-            aria-label="Go to profile"
-            title={user?.full_name || "Profile"}
+  const renderNavItems = (isMobile = false) => (
+    <div className="flex flex-col gap-1">
+      {navItems.map(({ path, label, Icon }) => {
+        const isActive =
+          location.pathname === path ||
+          (path !== "/dashboard" && location.pathname.startsWith(path));
+        return (
+          <Link
+            key={path}
+            to={path}
+            onClick={() => {
+              if (isMobile) closeMobile();
+            }}
+            className={`nav-item${isActive ? " active" : ""}`}
+            title={label}
           >
-            <div className="sidebar-avatar">
-              {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
-            </div>
-            <div className="sidebar-user-info">
-              <span className="sidebar-user-name">{user?.full_name || "User"}</span>
-              <span className="sidebar-user-role">Advocate</span>
-            </div>
-          </button>
-
-          {/* Dark Mode Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="sidebar-theme-btn"
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            title={isDark ? "Light mode" : "Dark mode"}
-          >
-            {isDark ? (
-              <Sun size={17} key="sun" className="animate-icon-swap" />
-            ) : (
-              <Moon size={17} key="moon" className="animate-icon-swap" />
+            {isActive && !isMobile && (
+              <motion.div
+                layoutId="sidebar-active-pill"
+                className="nav-item-active-pill"
+                transition={{
+                  type: "spring",
+                  stiffness: 380,
+                  damping: 28,
+                  mass: 0.7,
+                }}
+              />
             )}
-          </button>
-        </div>
+            {isActive && isMobile && (
+              <div className="nav-item-active-pill" />
+            )}
+            <span className="nav-item-inner">
+              <Icon />
+              <span className="nav-label">{label}</span>
+            </span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+
+  const renderFooter = (isMobile = false) => (
+    <div className="sidebar-foot">
+      <div className="sidebar-foot-row">
+        {/* Clicking anywhere on the pill goes to /profile */}
+        <button
+          onClick={() => {
+            if (isMobile) closeMobile();
+            navigate("/profile");
+          }}
+          className="sidebar-profile-btn"
+          aria-label="Go to profile"
+          title={user?.full_name || "Profile"}
+        >
+          <div className="sidebar-avatar">
+            {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
+          </div>
+          <div className="sidebar-user-info">
+            <span className="sidebar-user-name">{user?.full_name || "User"}</span>
+            <span className="sidebar-user-role">Advocate</span>
+          </div>
+        </button>
+
+        {/* Dark Mode Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="sidebar-theme-btn"
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          title={isDark ? "Light mode" : "Dark mode"}
+        >
+          {isDark ? (
+            <Sun size={17} key="sun" className="animate-icon-swap" />
+          ) : (
+            <Moon size={17} key="moon" className="animate-icon-swap" />
+          )}
+        </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* ── DESKTOP SIDEBAR (≥ 768px): 100% untouched layout & design ── */}
+      <aside className="sidebar hidden md:flex">
+        <div className="sidebar-top">
+          <div className="wordmark">
+            <ScalesIcon />
+            <span className="mark">SUITS</span>
+          </div>
+
+          <nav className="sidebar-nav">
+            {renderNavItems(false)}
+          </nav>
+        </div>
+
+        {renderFooter(false)}
+      </aside>
+
+      {/* ── MOBILE OFF-CANVAS SLIDE-OVER DRAWER (< 768px) ── */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <div className="mobile-drawer-portal md:hidden">
+            {/* Backdrop blur overlay */}
+            <motion.div
+              className="mobile-drawer-backdrop"
+              onClick={closeMobile}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            />
+
+            {/* Sliding off-canvas panel */}
+            <motion.aside
+              className="sidebar-mobile-drawer"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 360, damping: 32 }}
+            >
+              <div className="sidebar-top">
+                <div className="wordmark justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <ScalesIcon />
+                    <span className="mark">SUITS</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeMobile}
+                    className="p-1 rounded-full text-[var(--ink-faint)] hover:text-[var(--ink)]"
+                    aria-label="Close navigation"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <nav className="sidebar-nav">
+                  {renderNavItems(true)}
+                </nav>
+              </div>
+
+              {renderFooter(true)}
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

@@ -591,10 +591,10 @@ export default function CaseDashboardPage() {
 
       {/* Floating AI Chat (rendered when reader is closed) */}
       {!isReaderOpen && createPortal(
-        <div className="fixed bottom-6 right-6 z-[1000] flex flex-col items-end pointer-events-auto">
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[1000] flex flex-col items-end pointer-events-auto">
           {isChatOpen && (
             <div 
-              className="mb-4 w-[480px] h-[650px] max-h-[80vh] flex flex-col rounded-2xl overflow-hidden animate-slide-up shadow-2xl border overscroll-contain"
+              className="mb-4 w-[calc(100vw-32px)] sm:w-[480px] h-[650px] max-h-[80vh] flex flex-col rounded-2xl overflow-hidden animate-slide-up shadow-2xl border overscroll-contain"
               style={{
                 borderColor: "var(--border)",
                 background: "var(--card)",

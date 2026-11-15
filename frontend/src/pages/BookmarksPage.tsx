@@ -38,9 +38,9 @@ export default function BookmarksPage() {
   };
 
   return (
-    <div className="dashboard-layout" style={{ maxWidth: "100%", width: "100%", marginTop: 36 }}>
-      {/* Centered Heading with generous top gap */}
-      <div className="text-center mb-8">
+    <div className="dashboard-layout mt-4 sm:mt-9 w-full max-w-full">
+      {/* Centered Heading */}
+      <div className="text-center mb-6 sm:mb-8">
         <h1
           className="text-2xl font-medium"
           style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
@@ -58,11 +58,11 @@ export default function BookmarksPage() {
           icon={<Bookmark size={32} />}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
           {bookmarks.map((b) => (
             <div
               key={b.id}
-              className="card-float group p-6 flex flex-col justify-between gap-5 transition-all"
+              className="card-float group p-4 sm:p-6 flex flex-col justify-between gap-4 sm:gap-5 transition-all"
               style={{ borderRadius: "var(--radius-md)" }}
             >
               <div className="flex items-start justify-between gap-4">
