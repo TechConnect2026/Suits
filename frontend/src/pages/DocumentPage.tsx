@@ -255,13 +255,13 @@ export default function DocumentPage() {
   };
 
   return (
-    <div className="dashboard-layout pb-24" style={{ maxWidth: "100%", width: "100%", marginTop: 36 }}>
+    <div className="dashboard-layout pb-24" style={{ maxWidth: "100%", width: "100%" }}>
       {/* ── Page Header / Sub-navigation ── */}
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-nowrap w-full pb-1">
           <button
             onClick={() => setShowDraftsDrawer(!showDraftsDrawer)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap"
             style={{
               background: "var(--surface-container)",
               color: "var(--ink)",
@@ -276,7 +276,7 @@ export default function DocumentPage() {
 
           <button
             onClick={handleCreateNewDraft}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer shrink-0 whitespace-nowrap"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
@@ -289,7 +289,7 @@ export default function DocumentPage() {
 
           <button
             onClick={() => setShowTemplateModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer shrink-0 whitespace-nowrap"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
@@ -303,7 +303,7 @@ export default function DocumentPage() {
 
           <button
             onClick={() => setShowAdversarialModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer hover:opacity-90 active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 whitespace-nowrap"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
@@ -317,7 +317,7 @@ export default function DocumentPage() {
 
           <button
             onClick={() => setShowDefenseModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer shrink-0 whitespace-nowrap"
             style={{
               background: "var(--surface-container)",
               color: "var(--ink)",

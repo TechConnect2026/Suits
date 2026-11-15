@@ -538,85 +538,98 @@ export function DocumentReaderModal({
         }}
       >
         {/* ========================================================
-            SLEEK MINIMALIST HEADER
+            SLEEK MINIMALIST HEADER (Responsive Mobile & Desktop)
            ======================================================== */}
         <header
-          className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b flex-shrink-0"
+          className="px-3 sm:px-4 py-2 sm:py-2.5 border-b flex-shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-2.5"
           style={{
             background: "var(--surface)",
             borderColor: "var(--border)",
           }}
         >
-          {/* Left: Metadata Badge & Order Switcher */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{
-                background: "var(--primary)",
-                color: "var(--on-primary)",
-              }}
-            >
-              <Scale size={15} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3
-                  className="text-xs font-semibold truncate max-w-[200px] sm:max-w-sm md:max-w-md"
-                  style={{ color: "var(--text-primary)" }}
-                  title={effectiveCaseTitle}
-                >
-                  {effectiveCaseTitle}
-                </h3>
-                {effectiveCnr && (
-                  <span
-                    className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono"
-                    style={{
-                      background: "var(--surface-container)",
-                      color: "var(--text-muted)",
-                      border: "1px solid var(--border)",
-                    }}
+          {/* Top Row on mobile / Left group on desktop */}
+          <div className="flex items-center justify-between md:justify-start gap-2.5 min-w-0 w-full md:w-auto">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{
+                  background: "var(--primary)",
+                  color: "var(--on-primary)",
+                }}
+              >
+                <Scale size={15} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h3
+                    className="text-xs font-semibold truncate max-w-[220px] sm:max-w-sm md:max-w-md"
+                    style={{ color: "var(--text-primary)" }}
+                    title={effectiveCaseTitle}
                   >
-                    {effectiveCnr.startsWith("doc_") || /^\d+$/.test(effectiveCnr)
-                      ? `Kanoon Doc: ${effectiveCnr.replace("doc_", "")}`
-                      : effectiveCnr.length === 16
-                      ? `CNR: ${effectiveCnr}`
-                      : `Ref: ${effectiveCnr}`}
-                  </span>
-                )}
-              </div>
-
-              {/* Sub-header with Court Name or Multi-Order Switcher */}
-              <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                <span>{effectiveCourtName}</span>
-                <span>•</span>
-                {validOrders.length > 1 ? (
-                  /* Multi-Order Dropdown Switcher */
-                  <div className="relative inline-flex items-center">
-                    <select
-                      value={currentFilename}
-                      onChange={(e) => handleSelectOrder(e.target.value)}
-                      className="text-[11px] font-medium bg-transparent border-0 cursor-pointer pr-4 focus:ring-0 focus:outline-none"
-                      style={{ color: "var(--text-primary)" }}
+                    {effectiveCaseTitle}
+                  </h3>
+                  {effectiveCnr && (
+                    <span
+                      className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono"
+                      style={{
+                        background: "var(--surface-container)",
+                        color: "var(--text-muted)",
+                        border: "1px solid var(--border)",
+                      }}
                     >
-                      {validOrders.map((o, idx) => (
-                        <option key={idx} value={o.filename || ""}>
-                          Order ({o.order_date || "Date N/A"}) - {o.description || o.filename}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={11} className="pointer-events-none -ml-3" style={{ color: "var(--text-muted)" }} />
-                  </div>
-                ) : (
-                  <span>Record: {currentOrderDate}</span>
-                )}
+                      {effectiveCnr.startsWith("doc_") || /^\d+$/.test(effectiveCnr)
+                        ? `Kanoon Doc: ${effectiveCnr.replace("doc_", "")}`
+                        : effectiveCnr.length === 16
+                        ? `CNR: ${effectiveCnr}`
+                        : `Ref: ${effectiveCnr}`}
+                    </span>
+                  )}
+                </div>
+
+                {/* Sub-header with Court Name or Multi-Order Switcher */}
+                <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  <span className="truncate">{effectiveCourtName}</span>
+                  <span>•</span>
+                  {validOrders.length > 1 ? (
+                    /* Multi-Order Dropdown Switcher */
+                    <div className="relative inline-flex items-center">
+                      <select
+                        value={currentFilename}
+                        onChange={(e) => handleSelectOrder(e.target.value)}
+                        className="text-[11px] font-medium bg-transparent border-0 cursor-pointer pr-4 focus:ring-0 focus:outline-none"
+                        style={{ color: "var(--text-primary)" }}
+                      >
+                        {validOrders.map((o, idx) => (
+                          <option key={idx} value={o.filename || ""}>
+                            Order ({o.order_date || "Date N/A"}) - {o.description || o.filename}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={11} className="pointer-events-none -ml-3" style={{ color: "var(--text-muted)" }} />
+                    </div>
+                  ) : (
+                    <span>Record: {currentOrderDate}</span>
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* Mobile-only Close button in Top Row */}
+            <button
+              onClick={onClose}
+              className="p-1 rounded-full hover:bg-[var(--surface-container)] cursor-pointer md:hidden flex-shrink-0"
+              style={{ color: "var(--text-primary)" }}
+              title="Close Reader (Esc)"
+              aria-label="Close Reader"
+            >
+              <X size={18} />
+            </button>
           </div>
 
-          {/* Center: Segmented View Switcher */}
+          {/* Mode Switcher Tabs (Scrollable on mobile) */}
           {allowModeToggle && (
             <div
-              className="flex items-center p-0.5 rounded-full border"
+              className="flex items-center p-0.5 rounded-full border overflow-x-auto scrollbar-none flex-nowrap max-w-full shrink-0"
               style={{
                 background: "var(--surface-container)",
                 borderColor: "var(--border)",
@@ -624,7 +637,7 @@ export function DocumentReaderModal({
             >
               <button
                 onClick={() => setMode("pdf")}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all"
+                className="flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all shrink-0 whitespace-nowrap"
                 style={{
                   background: mode === "pdf" ? "var(--card)" : "transparent",
                   color: mode === "pdf" ? "var(--text-primary)" : "var(--text-muted)",
@@ -637,7 +650,7 @@ export function DocumentReaderModal({
 
               <button
                 onClick={() => setMode("text")}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all"
+                className="flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all shrink-0 whitespace-nowrap"
                 style={{
                   background: mode === "text" ? "var(--card)" : "transparent",
                   color: mode === "text" ? "var(--text-primary)" : "var(--text-muted)",
@@ -650,7 +663,7 @@ export function DocumentReaderModal({
 
               <button
                 onClick={() => setMode("ai")}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all"
+                className="flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all shrink-0 whitespace-nowrap"
                 style={{
                   background: mode === "ai" ? "var(--card)" : "transparent",
                   color: mode === "ai" ? "var(--brass-bright)" : "var(--text-muted)",
@@ -663,7 +676,7 @@ export function DocumentReaderModal({
 
               <button
                 onClick={() => setMode("anatomy")}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all"
+                className="flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-all shrink-0 whitespace-nowrap"
                 style={{
                   background: mode === "anatomy" ? "var(--card)" : "transparent",
                   color: mode === "anatomy" ? "var(--brass-bright)" : "var(--text-muted)",
@@ -676,8 +689,8 @@ export function DocumentReaderModal({
             </div>
           )}
 
-          {/* Right: Typography Controls, Fullscreen & Close */}
-          <div className="flex items-center gap-1.5">
+          {/* Right: Typography Controls, Fullscreen & Desktop Close */}
+          <div className="hidden md:flex items-center gap-1.5">
             {/* Clean Text Typography Controls */}
             {mode === "text" && (
               <>
@@ -1055,14 +1068,14 @@ export function DocumentReaderModal({
 
             <button
               onClick={onToggleChat}
-              className="h-14 w-14 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+              className="h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer"
               style={{
                 background: isChatOpen ? "var(--surface-container-high)" : "var(--primary)",
                 color: isChatOpen ? "var(--text-primary)" : "var(--on-primary)",
               }}
               title={isChatOpen ? "Minimize Assistant" : "Ask Document AI"}
             >
-              {isChatOpen ? <X size={24} /> : <MessageSquare size={24} />}
+              {isChatOpen ? <X size={20} className="sm:w-6 sm:h-6" /> : <MessageSquare size={20} className="sm:w-6 sm:h-6" />}
             </button>
           </div>
         </div>

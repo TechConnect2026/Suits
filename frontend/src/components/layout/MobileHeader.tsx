@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { Menu, Sun, Moon } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Menu, Sun, Moon, Search } from "lucide-react";
 import { useSidebarStore } from "@/store/sidebar-store";
 import { useThemeStore } from "@/store/theme-store";
 
@@ -18,6 +18,7 @@ function ScalesIcon() {
 }
 
 export function MobileHeader() {
+  const navigate = useNavigate();
   const { openMobile } = useSidebarStore();
   const { theme, toggleTheme } = useThemeStore();
   const isDark = theme === "dark";
@@ -40,15 +41,27 @@ export function MobileHeader() {
         <span className="mobile-header-title">SUITS</span>
       </Link>
 
-      {/* Right: Quick Theme toggle */}
-      <button
-        type="button"
-        onClick={toggleTheme}
-        className="mobile-header-btn"
-        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      >
-        {isDark ? <Sun size={18} /> : <Moon size={18} />}
-      </button>
+      {/* Right: Quick Search + Quick Theme toggle */}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => navigate("/search")}
+          className="mobile-header-btn"
+          aria-label="Search cases"
+          title="Search case law & judgments"
+        >
+          <Search size={18} />
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="mobile-header-btn"
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {isDark ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
     </header>
   );
 }

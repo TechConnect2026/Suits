@@ -1622,5 +1622,23 @@ input, button, select, textarea {
     width: 100% !important;
     max-width: 100% !important;
   }
+
+  /* Document Drafting Mobile Optimizations */
+  .legal-document-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    padding-top: 24px !important;
+    padding-bottom: 24px !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    box-sizing: border-box !important;
+    border-radius: 8px !important;
+  }
+
+  .legal-editor-canvas-container {
+    padding: 8px 4px !important;
+    border-radius: 12px !important;
+  }
 }
 

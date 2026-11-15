@@ -31,7 +31,11 @@ export default function AppLayout() {
         {/* Mobile App Bar (< 768px only) */}
         <MobileHeader />
 
-        {!hideTopSearchBar && <TopSearchBar />}
+        {!hideTopSearchBar && (
+          <div className="hidden md:block">
+            <TopSearchBar />
+          </div>
+        )}
         <main className="main-content">
           <div className="main-inner">
             <Outlet />
