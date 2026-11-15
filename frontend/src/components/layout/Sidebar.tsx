@@ -112,46 +112,52 @@ export default function Sidebar() {
   const { isMobileOpen, closeMobile } = useSidebarStore();
   const isDark = theme === "dark";
 
-  const renderNavItems = (isMobile = false) => (
-    <div className="flex flex-col gap-1">
-      {navItems.map(({ path, label, Icon }) => {
-        const isActive =
-          location.pathname === path ||
-          (path !== "/dashboard" && location.pathname.startsWith(path));
-        return (
-          <Link
-            key={path}
-            to={path}
-            onClick={() => {
-              if (isMobile) closeMobile();
-            }}
-            className={`nav-item${isActive ? " active" : ""}`}
-            title={label}
-          >
-            {isActive && !isMobile && (
-              <motion.div
-                layoutId="sidebar-active-pill"
-                className="nav-item-active-pill"
-                transition={{
-                  type: "spring",
-                  stiffness: 380,
-                  damping: 28,
-                  mass: 0.7,
-                }}
-              />
-            )}
-            {isActive && isMobile && (
-              <div className="nav-item-active-pill" />
-            )}
-            <span className="nav-item-inner">
-              <Icon />
-              <span className="nav-label">{label}</span>
-            </span>
-          </Link>
-        );
-      })}
-    </div>
-  );
+  const renderNavItems = (isMobile = false) => {
+    const items = isMobile
+      ? navItems.filter((item) => item.path !== "/document")
+      : navItems;
+
+    return (
+      <div className="flex flex-col gap-1">
+        {items.map(({ path, label, Icon }) => {
+          const isActive =
+            location.pathname === path ||
+            (path !== "/dashboard" && location.pathname.startsWith(path));
+          return (
+            <Link
+              key={path}
+              to={path}
+              onClick={() => {
+                if (isMobile) closeMobile();
+              }}
+              className={`nav-item${isActive ? " active" : ""}`}
+              title={label}
+            >
+              {isActive && !isMobile && (
+                <motion.div
+                  layoutId="sidebar-active-pill"
+                  className="nav-item-active-pill"
+                  transition={{
+                    type: "spring",
+                    stiffness: 380,
+                    damping: 28,
+                    mass: 0.7,
+                  }}
+                />
+              )}
+              {isActive && isMobile && (
+                <div className="nav-item-active-pill" />
+              )}
+              <span className="nav-item-inner">
+                <Icon />
+                <span className="nav-label">{label}</span>
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    );
+  };
 
   const renderFooter = (isMobile = false) => (
     <div className="sidebar-foot">

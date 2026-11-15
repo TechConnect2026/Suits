@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { LegalEditor } from "@/components/document/LegalEditor";
 import { DocumentChatDrawer } from "@/components/document/DocumentChatDrawer";
 import { CounterPleadingModal } from "@/components/defense/CounterPleadingModal";
@@ -16,6 +17,7 @@ import {
   ShieldAlert,
   Gavel,
   Swords,
+  Monitor,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -110,6 +112,7 @@ const DEFAULT_SAMPLE_DRAFT: DraftItem = {
 };
 
 export default function DocumentPage() {
+  const navigate = useNavigate();
   const [drafts, setDrafts] = useState<DraftItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -256,8 +259,56 @@ export default function DocumentPage() {
 
   return (
     <div className="dashboard-layout pb-24" style={{ maxWidth: "100%", width: "100%" }}>
-      {/* ── Page Header / Sub-navigation ── */}
-      <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6">
+      {/* ── Mobile Notice (< 768px): Desktop-Exclusive Fallback ── */}
+      <div className="md:hidden flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8 space-y-6">
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-sm"
+          style={{
+            background: "var(--brass-soft)",
+            color: "var(--brass)",
+            border: "1px solid var(--hairline)",
+          }}
+        >
+          <Monitor size={32} />
+        </div>
+
+        <div className="space-y-2 max-w-sm">
+          <span
+            className="text-[11px] font-mono uppercase tracking-wider font-semibold px-2.5 py-1 rounded inline-block"
+            style={{
+              background: "var(--surface-container)",
+              color: "var(--brass-bright)",
+              border: "1px solid var(--hairline-soft)",
+            }}
+          >
+            Desktop Exclusive
+          </span>
+          <h2
+            className="text-2xl font-semibold tracking-tight pt-1"
+            style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
+          >
+            Document Studio
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+            The Legal Document Studio, court margin formatting, and live legal drafting tools are designed exclusively for desktop displays.
+          </p>
+          <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+            Please open SUITS on a desktop or laptop to draft, format, and print court-ready legal pleadings.
+          </p>
+        </div>
+
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="btn btn-primary px-5 py-2.5 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm transition-transform active:scale-95 cursor-pointer"
+        >
+          <span>Return to Workspace</span>
+        </button>
+      </div>
+
+      {/* ── Desktop Document Studio (≥ 768px) ── */}
+      <div className="hidden md:block">
+        {/* ── Page Header / Sub-navigation ── */}
+        <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6">
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-nowrap w-full pb-1">
           <button
             onClick={() => setShowDraftsDrawer(!showDraftsDrawer)}
@@ -452,6 +503,7 @@ export default function DocumentPage() {
         activeDraftContent={activeDraft?.content}
         onInjectContent={(html) => handleContentSave(activeDraft.content + html)}
       />
+      </div>
     </div>
   );
 }
