@@ -38,7 +38,7 @@ export function MobileHeader() {
       {/* Center: Brand Wordmark */}
       <Link to="/dashboard" className="mobile-header-brand">
         <ScalesIcon />
-        <span className="mobile-header-title">SUITS</span>
+        <span className="mobile-header-title">SUIT</span>
       </Link>
 
       {/* Right: Quick Search + Quick Theme toggle */}

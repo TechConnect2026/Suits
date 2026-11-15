@@ -394,7 +394,7 @@ export default function FilesPage() {
             Evidence & Document Vault
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--ink-faint)" }}>
-            Upload private legal documents. SUITS automatically performs OCR, structured legal analysis, and full-text research indexing.
+            Upload private legal documents. SUIT automatically performs OCR, structured legal analysis, and full-text research indexing.
           </p>
         </div>
         <button

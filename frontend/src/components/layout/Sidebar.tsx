@@ -205,7 +205,7 @@ export default function Sidebar() {
         <div className="sidebar-top">
           <div className="wordmark">
             <ScalesIcon />
-            <span className="mark">SUITS</span>
+            <span className="mark">SUIT</span>
           </div>
 
           <nav className="sidebar-nav">
@@ -242,7 +242,7 @@ export default function Sidebar() {
                 <div className="wordmark justify-between">
                   <div className="flex items-center gap-2.5">
                     <ScalesIcon />
-                    <span className="mark">SUITS</span>
+                    <span className="mark">SUIT</span>
                   </div>
                   <button
                     type="button"

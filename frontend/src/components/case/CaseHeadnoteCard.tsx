@@ -69,7 +69,7 @@ export const CaseHeadnoteCard: React.FC<CaseHeadnoteCardProps> = ({
     if (!data || !data.headnote) return;
     const h = data.headnote;
     const lines = [
-      `=== SUITS LAW REPORT: EDITORIAL HEADNOTE ===`,
+      `=== SUIT LAW REPORT: EDITORIAL HEADNOTE ===`,
       `CNR: ${data.target_cnr}`,
       `Order: ${data.order_title || 'Judgment'}`,
       `Operative Disposition: ${h.operative_disposition}`,
@@ -92,7 +92,7 @@ export const CaseHeadnoteCard: React.FC<CaseHeadnoteCardProps> = ({
             ``,
           ]
         : []),
-      `[Source: SUITS AI Court Intelligence · InLegalBERT & Gemini 3.6]`,
+      `[Source: SUIT AI Court Intelligence · InLegalBERT & Gemini 3.6]`,
     ];
 
     navigator.clipboard.writeText(lines.join('\n'));

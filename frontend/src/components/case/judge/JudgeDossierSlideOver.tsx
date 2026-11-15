@@ -894,7 +894,7 @@ export function JudgeDossierSlideOver({
             color: "var(--ink-faint)",
           }}
         >
-          <span>SUITS Judicial Analytics • Indian Kanoon Verified</span>
+          <span>SUIT Judicial Analytics • Indian Kanoon Verified</span>
         </div>
       </aside>
     </div>

@@ -59,7 +59,7 @@ export function OrderCard({ cnr, order, onOpenAI, onDownloadPDF, onReadOrder }: 
                   borderRadius: "var(--radius-button)",
                   padding: "7px 14px",
                 }}
-                title="Read court document inside SUITS"
+                title="Read court document inside SUIT"
               >
                 <BookOpen size={14} style={{ color: "var(--primary)" }} />
                 <span>Read Order</span>

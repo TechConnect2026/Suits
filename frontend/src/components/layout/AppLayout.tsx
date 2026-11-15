@@ -29,7 +29,9 @@ export default function AppLayout() {
       {/* Main column: mobile header + top search bar + page content */}
       <div className="main-column">
         {/* Mobile App Bar (< 768px only) */}
-        <MobileHeader />
+        <div className="block md:hidden">
+          <MobileHeader />
+        </div>
 
         {!hideTopSearchBar && (
           <div className="hidden md:block">

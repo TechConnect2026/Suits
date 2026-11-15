@@ -18,7 +18,7 @@ export default function SettingsPage() {
           Preferences
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-          Customize your SUITS workspace experience.
+          Customize your SUIT workspace experience.
         </p>
       </div>
 

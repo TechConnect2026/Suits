@@ -293,7 +293,7 @@ export default function DocumentPage() {
             The Legal Document Studio, court margin formatting, and live legal drafting tools are designed exclusively for desktop displays.
           </p>
           <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
-            Please open SUITS on a desktop or laptop to draft, format, and print court-ready legal pleadings.
+            Please open SUIT on a desktop or laptop to draft, format, and print court-ready legal pleadings.
           </p>
         </div>
 

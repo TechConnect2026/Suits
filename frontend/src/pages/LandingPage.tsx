@@ -688,7 +688,7 @@ export default function LandingPage() {
         {/* ==================== NAVBAR ==================== */}
         <header>
           <Link to="/" className="logo">
-            SUITS<span>.</span>
+            SUIT<span>.</span>
           </Link>
 
           <nav className="nav-glass" ref={navRef}>
@@ -763,7 +763,7 @@ export default function LandingPage() {
                 </h1>
 
                 <p className="hero-description">
-                  SUITS helps you understand legal processes,
+                  SUIT helps you understand legal processes,
                   access reliable information, and make informed
                   decisions — all in one place.
                 </p>
@@ -854,7 +854,7 @@ export default function LandingPage() {
                 <span>understanding.</span>
               </h2>
               <p>
-                SUITS is your step towards a more informed,
+                SUIT is your step towards a more informed,
                 empowered and equal tomorrow.
               </p>
             </section>
@@ -886,7 +886,7 @@ export default function LandingPage() {
                   </h2>
 
                   <p className="text-[15px] sm:text-[15.5px] leading-[1.7] text-[#98A1B2]">
-                    At SUITS, our mission is to make legal knowledge accessible,
+                    At SUIT, our mission is to make legal knowledge accessible,
                     understandable, and useful for everyone — breaking down
                     barriers between the law and the people it serves.
                   </p>
@@ -977,7 +977,7 @@ export default function LandingPage() {
               </h2>
               <p className="text-[15px] text-[#8E95A5] leading-relaxed">
                 From finding a precedent to understanding your fundamental rights,
-                SUITS makes legal intelligence clear and accessible.
+                SUIT makes legal intelligence clear and accessible.
               </p>
             </div>
 
@@ -996,7 +996,7 @@ export default function LandingPage() {
                     <span style={{ color: "var(--gold-light)" }}>simplified.</span>
                   </h3>
                   <p className="text-[15px] leading-[1.7] text-[#98A1B2]">
-                    SUITS is an intelligent legal research platform that combines court case databases
+                    SUIT is an intelligent legal research platform that combines court case databases
                     with AI analysis. Search across Indian Supreme Court and High Court judgments,
                     get plain-language summaries of complex legal documents, and organize your
                     research — all from a single, intuitive workspace.
@@ -1287,10 +1287,10 @@ export default function LandingPage() {
           <div className="w-[92%] max-w-[1535px] mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-6 text-center sm:text-left">
               <span className="text-[21px] font-bold tracking-tight text-white flex items-center" style={{ letterSpacing: "-1.5px" }}>
-                SUITS
+                SUIT
               </span>
               <span className="text-[12.5px] text-[#70757e]">
-                &copy; {new Date().getFullYear()} SUITS. Precision in precedent, intelligence in every case.
+                &copy; {new Date().getFullYear()} SUIT. Precision in precedent, intelligence in every case.
               </span>
             </div>
 

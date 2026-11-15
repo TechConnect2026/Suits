@@ -48,7 +48,7 @@ export const DocumentChatDrawer: React.FC<DocumentChatDrawerProps> = ({
         id: "welcome-1",
         role: "assistant",
         message:
-          "Hello! I am your Suits Legal Drafting Assistant. Ask me about Indian court formats, statutory grounds under BNS/BNSS, governing landmark precedents, or request custom legal clauses to insert into your document.",
+          "Hello! I am your SUIT Legal Drafting Assistant. Ask me about Indian court formats, statutory grounds under BNS/BNSS, governing landmark precedents, or request custom legal clauses to insert into your document.",
         created_at: new Date().toISOString(),
       },
     ];
@@ -231,7 +231,7 @@ export const DocumentChatDrawer: React.FC<DocumentChatDrawerProps> = ({
               </div>
               <div className="leading-tight">
                 <span className="font-semibold text-xs block" style={{ color: "var(--ink)" }}>
-                  Suits Legal Assistant
+                  SUIT Legal Assistant
                 </span>
                 <span className="text-[10px] text-muted-foreground font-mono">
                   Drafting & Precedent AI
@@ -283,7 +283,7 @@ export const DocumentChatDrawer: React.FC<DocumentChatDrawerProps> = ({
           color: isOpen ? "var(--ink)" : "var(--on-primary)",
           boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
         }}
-        title={isOpen ? "Close Legal AI Assistant" : "Ask Suits Legal AI Assistant"}
+        title={isOpen ? "Close Legal AI Assistant" : "Ask SUIT Legal AI Assistant"}
       >
         {isOpen ? (
           <X size={22} />

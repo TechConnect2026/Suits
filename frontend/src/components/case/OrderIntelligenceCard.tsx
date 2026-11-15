@@ -147,7 +147,7 @@ export function OrderIntelligenceCard({
   const copyHeadnote = () => {
     if (!data) return;
     const lines = [
-      `=== SUITS LAW REPORT: EDITORIAL HEADNOTE ===`,
+      `=== SUIT LAW REPORT: EDITORIAL HEADNOTE ===`,
       `CNR: ${cnr}`,
       `Order: ${targetFile}`,
       `Operative Disposition: ${operativeDisposition}`,
@@ -158,7 +158,7 @@ export function OrderIntelligenceCard({
       precedentCitator.length > 0
         ? `\nPRECEDENTS TREATED:\n${precedentCitator.map((p: any) => `• [${p.treatment}] ${p.precedent_name} — ${p.bench_commentary}`).join("\n")}`
         : "",
-      `\n[Source: SUITS AI Court Intelligence · Publisher-Grade Standard]`,
+      `\n[Source: SUIT AI Court Intelligence · Publisher-Grade Standard]`,
     ]
       .filter(Boolean)
       .join("\n");
