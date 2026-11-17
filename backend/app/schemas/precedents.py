@@ -103,7 +103,7 @@ class StrategicRelevanceItem(BaseModel):
 
 class VerdictAnatomyRequest(BaseModel):
     """Request payload to break down a judgment into scannable modules combined with strategic relevance."""
-    cnr: Optional[str] = Field(None, description="Case CNR if from eCourts cache")
+    cnr: Optional[str] = Field(None, description="Case CNR or Indian Kanoon ID from cache")
     tid: Optional[int] = Field(None, description="Indian Kanoon Document ID")
     raw_text: Optional[str] = Field(None, description="Full judgment text or extracted text")
     case_title: Optional[str] = Field(default="Judgment", description="Case title")

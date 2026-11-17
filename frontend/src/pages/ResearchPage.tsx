@@ -19,7 +19,12 @@ import { DocumentReaderModal } from "@/components/case/DocumentReaderModal";
 import { ResearchBriefModal } from "@/components/files/ResearchBriefModal";
 import { toast } from "sonner";
 
-export default function ResearchPage() {
+interface ResearchPageProps {
+  embedded?: boolean;
+  onCountChange?: (count: number) => void;
+}
+
+export default function ResearchPage({ embedded = false, onCountChange }: ResearchPageProps = {}) {
   const [files, setFiles] = useState<SavedFile[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,11 +38,9 @@ export default function ResearchPage() {
     setLoading(true);
     try {
       const data = await fileService.list();
-      if (data && Array.isArray(data.items)) {
-        setFiles(data.items);
-      } else {
-        setFiles([]);
-      }
+      const items = data && Array.isArray(data.items) ? data.items : [];
+      setFiles(items);
+      onCountChange?.(items.length);
     } catch {
       toast.error("Failed to load saved research.");
     } finally {
@@ -54,7 +57,11 @@ export default function ResearchPage() {
     if (!confirm("Remove this dossier from your vault?")) return;
     try {
       await fileService.delete(fileId);
-      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+      setFiles((prev) => {
+        const next = prev.filter((f) => f.id !== fileId);
+        onCountChange?.(next.length);
+        return next;
+      });
       toast.info("Dossier removed.");
     } catch {
       toast.error("Failed to delete.");
@@ -73,47 +80,48 @@ export default function ResearchPage() {
   };
 
   return (
-    <div className="dashboard-layout" style={{ maxWidth: "100%", width: "100%", marginTop: 36 }}>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8 pb-4 border-b border-border/40">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+    <div className={embedded ? "w-full max-w-full" : "dashboard-layout"} style={embedded ? undefined : { maxWidth: "100%", width: "100%", marginTop: 36 }}>
+      {!embedded && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8 pb-4 border-b border-border/40">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{
+                  background: "var(--brass-soft)",
+                  color: "var(--brass-bright)",
+                  border: "1px solid var(--hairline)",
+                }}
+              >
+                <FolderLock size={18} />
+              </div>
+              <h1
+                className="text-2xl font-medium"
+                style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
+              >
+                Research Vault
+              </h1>
+            </div>
+            <p className="text-xs text-muted-foreground pl-11">
+              Saved case dossiers, annotated judgments, and synthesized legal research briefs.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto pl-11 sm:pl-0">
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono"
               style={{
-                background: "var(--brass-soft)",
-                color: "var(--brass-bright)",
+                background: "var(--surface-container)",
+                color: "var(--ink-dim)",
                 border: "1px solid var(--hairline)",
               }}
             >
-              <FolderLock size={18} />
-            </div>
-            <h1
-              className="text-2xl font-medium"
-              style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
-            >
-              Research Vault
-            </h1>
+              <BookOpen size={12} style={{ color: "var(--brass)" }} />
+              {files.length} {files.length === 1 ? "Dossier" : "Dossiers"}
+            </span>
           </div>
-          <p className="text-xs text-muted-foreground pl-11">
-            Saved case dossiers, annotated judgments, and synthesized legal research briefs.
-          </p>
         </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto pl-11 sm:pl-0">
-          <span
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono"
-            style={{
-              background: "var(--surface-container)",
-              color: "var(--ink-dim)",
-              border: "1px solid var(--hairline)",
-            }}
-          >
-            <BookOpen size={12} style={{ color: "var(--brass)" }} />
-            {files.length} {files.length === 1 ? "Dossier" : "Dossiers"}
-          </span>
-        </div>
-      </div>
+      )}
 
       {loading ? (
         <SkeletonLoader count={3} height="76px" />

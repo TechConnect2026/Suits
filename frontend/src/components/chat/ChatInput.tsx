@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowUp, Sparkles, Plus, Mic, MicOff, Volume2 } from "lucide-react";
+import { ArrowUp, Sparkles, Plus, Mic, MicOff } from "lucide-react";
 import { useLegalSpeechRecognition } from "@/hooks/useLegalSpeechRecognition";
 import { LegalCorrection } from "@/lib/dictation/legalCorrectionEngine";
+import { LegalWaveformVisualizer } from "./LegalWaveformVisualizer";
 
 interface ChatInputProps {
   onSend: (text: string) => void;
@@ -28,6 +29,7 @@ export function ChatInput({
     audioLevel,
     startListening,
     stopListening,
+    cancelListening,
   } = useLegalSpeechRecognition({
     enableChime: true,
     onFinalTranscript: (finalText, corrections) => {
@@ -42,6 +44,19 @@ export function ChatInput({
       }
     },
   });
+
+  // Allow Escape key to cancel active inline dictation
+  useEffect(() => {
+    if (!isListening) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancelListening();
+      }
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [isListening, cancelListening]);
 
   // Dynamic auto-grow from 38px to 160px
   useEffect(() => {
@@ -85,51 +100,39 @@ export function ChatInput({
 
   return (
     <div className="w-full relative flex flex-col gap-1.5">
-      {/* ── Active Dictation Interim Text & Corrections Banner ── */}
-      {(isListening || appliedCorrections.length > 0) && (
+      {/* ── Active Inline Legal Waveform Dictation Visualizer ── */}
+      <LegalWaveformVisualizer
+        isListening={isListening}
+        audioLevel={audioLevel}
+        interimText={interimText}
+        recentCorrections={appliedCorrections}
+        onStop={stopListening}
+        onCancel={cancelListening}
+      />
+
+      {/* ── Post-Dictation Indian Legal Lexicon Applied Pill Bar ── */}
+      {!isListening && appliedCorrections.length > 0 && (
         <div
           className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border text-xs animate-in fade-in slide-in-from-bottom-1 duration-150"
           style={{
-            background: isListening ? "rgba(196, 164, 84, 0.08)" : "var(--surface-container)",
-            borderColor: isListening ? "var(--brass)" : "var(--hairline)",
+            background: "var(--surface-container)",
+            borderColor: "var(--hairline)",
           }}
         >
-          {isListening ? (
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+              ⚡ Indian Lexicon Applied:
+            </span>
+            {appliedCorrections.map((corr, idx) => (
+              <span
+                key={idx}
+                className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                title={`Spoken: "${corr.original}" → Corrected: "${corr.corrected}"`}
+              >
+                {corr.corrected}
               </span>
-              <span className="font-semibold text-[11px] shrink-0" style={{ color: "var(--brass)" }}>
-                Listening (en-IN):
-              </span>
-              <span className="italic truncate text-[11px]" style={{ color: "var(--ink)" }}>
-                {interimText || "Speak legal pleadings or citations..."}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                ⚡ Indian Lexicon Applied:
-              </span>
-              {appliedCorrections.map((corr, idx) => (
-                <span
-                  key={idx}
-                  className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                  title={`Spoken: "${corr.original}" → Corrected: "${corr.corrected}"`}
-                >
-                  {corr.corrected}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {isListening && (
-            <div className="flex items-center gap-1 text-[10px] font-mono shrink-0" style={{ color: "var(--brass)" }}>
-              <Volume2 size={11} className="animate-pulse" />
-              <span>{Math.round(audioLevel * 100)}%</span>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       )}
 
@@ -166,7 +169,7 @@ export function ChatInput({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder="Ask a legal question, analyze citations, or dictate pleadings (Click Mic or Hold Alt)..."
+          placeholder="Ask a legal question, analyze citations, or dictate pleadings (Click Mic or Press Alt+Z)..."
           className="flex-1 max-h-[160px] min-h-[38px] py-2 px-1.5 text-xs sm:text-[13.5px] resize-none outline-none bg-transparent leading-relaxed"
           style={{ color: "var(--ink)" }}
           rows={1}

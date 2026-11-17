@@ -74,14 +74,4 @@ export const caseService = {
     );
     return res.data as ArrayBuffer;
   },
-
-  getCourtStructure: async () => {
-    const res = await api.get<APIResponse<unknown>>("/cases/reference/court-structure");
-    return res.data.data;
-  },
-
-  getEnums: async () => {
-    const res = await api.get<APIResponse<unknown>>("/cases/reference/enums");
-    return res.data.data;
-  },
 };

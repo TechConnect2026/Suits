@@ -2,9 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LegalEditor } from "@/components/document/LegalEditor";
 import { DocumentChatDrawer } from "@/components/document/DocumentChatDrawer";
-import { CounterPleadingModal } from "@/components/defense/CounterPleadingModal";
 import { DraftingTemplateModal } from "@/components/document/DraftingTemplateModal";
-import { AdversarialStrategyModal } from "@/components/defense/AdversarialStrategyModal";
+import { AdversarialDefenseSuiteModal } from "@/components/defense/AdversarialDefenseSuiteModal";
 import {
   FileText,
   Plus,
@@ -14,7 +13,6 @@ import {
   Clock,
   ChevronRight,
   BookOpen,
-  ShieldAlert,
   Gavel,
   Swords,
   Monitor,
@@ -133,9 +131,8 @@ export default function DocumentPage() {
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(new Date());
   const [showDraftsDrawer, setShowDraftsDrawer] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showDefenseModal, setShowDefenseModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [showAdversarialModal, setShowAdversarialModal] = useState(false);
+  const [showDefenseSuiteModal, setShowDefenseSuiteModal] = useState(false);
 
   const activeDraft = drafts.find((d) => d.id === activeDraftId) || drafts[0];
 
@@ -353,31 +350,17 @@ export default function DocumentPage() {
           </button>
 
           <button
-            onClick={() => setShowAdversarialModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 whitespace-nowrap"
+            onClick={() => setShowDefenseSuiteModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 whitespace-nowrap"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
               border: "1px solid var(--brass)",
             }}
-            title="Strategic Adversarial War Room: 4-Column Opposition Matrix, Stay Analyzer & Weakness Radar"
+            title="Unified Adversarial Defense Suite: Opposition Matrix, Stay Analyzer, Weakness Radar & Order VIII Written Statement"
           >
             <Swords size={14} />
-            <span>Adversarial War Room</span>
-          </button>
-
-          <button
-            onClick={() => setShowDefenseModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer shrink-0 whitespace-nowrap"
-            style={{
-              background: "var(--surface-container)",
-              color: "var(--ink)",
-              border: "1px solid var(--hairline)",
-            }}
-            title="Synthesize court-ready Written Statement under Order VIII CPC"
-          >
-            <ShieldAlert size={14} style={{ color: "var(--brass)" }} />
-            <span>Draft Defense / WS</span>
+            <span>Adversarial Defense Suite</span>
           </button>
         </div>
       </div>
@@ -471,7 +454,7 @@ export default function DocumentPage() {
           lastSavedAt={lastSavedAt}
           isFullscreen={isFullscreen}
           onFullscreenChange={setIsFullscreen}
-          onOpenAdversarial={() => setShowAdversarialModal(true)}
+          onOpenAdversarial={() => setShowDefenseSuiteModal(true)}
         />
       )}
 
@@ -488,20 +471,14 @@ export default function DocumentPage() {
         onOpenInEditor={handleOpenTemplateDraft}
       />
 
-      {/* ── Adversarial Defense Engine Modal (Order VIII CPC) ── */}
-      <CounterPleadingModal
-        isOpen={showDefenseModal}
-        onClose={() => setShowDefenseModal(false)}
-        onOpenInEditor={handleOpenDefenseDraft}
-      />
-
-      {/* ── Strategic Adversarial War Room Modal (Pillar 2) ── */}
-      <AdversarialStrategyModal
-        isOpen={showAdversarialModal}
-        onClose={() => setShowAdversarialModal(false)}
+      {/* ── Unified Adversarial Defense Suite Modal (Matrix + Stay + Radar + Written Statement) ── */}
+      <AdversarialDefenseSuiteModal
+        isOpen={showDefenseSuiteModal}
+        onClose={() => setShowDefenseSuiteModal(false)}
         activeDraftTitle={activeDraft?.title}
         activeDraftContent={activeDraft?.content}
         onInjectContent={(html) => handleContentSave(activeDraft.content + html)}
+        onOpenInEditor={handleOpenDefenseDraft}
       />
       </div>
     </div>

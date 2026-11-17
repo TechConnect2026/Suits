@@ -543,7 +543,7 @@ class AnalyticsService:
             if cc and cc.response_json:
                 try:
                     case_data = json.loads(cc.response_json)
-                    # eCourts acts & sections
+                    # Cached case acts & sections
                     acts_sec = case_data.get("acts_and_sections") or case_data.get("actsAndSections") or []
                     for item in acts_sec:
                         if isinstance(item, str):
@@ -1033,7 +1033,6 @@ class AnalyticsService:
         # 2. Aggregations
         top_acts = await self.aggregate_top_cited_acts(user_id, db)
         court_dist = await self.aggregate_court_distribution(user_id, db)
-        activity_trends = await self.aggregate_activity_telemetry(user_id, db)
 
         return PracticeInsightsResponse(
             bookmarks=bm_count,
@@ -1044,7 +1043,6 @@ class AnalyticsService:
             total_statutes_analyzed=len(top_acts),
             top_cited_acts=top_acts,
             court_distribution=court_dist,
-            activity_trends=activity_trends,
         )
 
 

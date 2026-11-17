@@ -13,7 +13,7 @@ import httpx
 import structlog
 
 from app.core.config import settings
-from app.core.exceptions import ECourtsAPIError
+from app.core.exceptions import KanoonAPIError
 
 logger = structlog.get_logger()
 
@@ -111,7 +111,7 @@ class KanoonClient:
                         elapsed_ms=elapsed_ms,
                         text=response.text[:500],
                     )
-                    raise ECourtsAPIError(
+                    raise KanoonAPIError(
                         f"Indian Kanoon API Error {response.status_code} for {endpoint}"
                     )
 
@@ -132,9 +132,9 @@ class KanoonClient:
                 logger.warning("KANOON_CONNECTION_ERROR", error=str(exc), url=endpoint, elapsed_ms=elapsed_ms)
                 if attempt < len(attempts) - 1:
                     continue
-                raise ECourtsAPIError(f"Connection error reaching Indian Kanoon API: {exc}") from exc
+                raise KanoonAPIError(f"Connection error reaching Indian Kanoon API: {exc}") from exc
 
-        raise ECourtsAPIError(f"Indian Kanoon API failed after {len(attempts)} attempts: {endpoint}")
+        raise KanoonAPIError(f"Indian Kanoon API failed after {len(attempts)} attempts: {endpoint}")
 
     async def search_docs(
         self,

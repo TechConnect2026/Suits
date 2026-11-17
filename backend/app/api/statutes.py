@@ -1,14 +1,12 @@
 """Statutes router - Criminal Law Era Transition Engine (IPC/CrPC/IEA ↔ BNS/BNSS/BSA)."""
 
-import re
-from fastapi import APIRouter, Query, Response, HTTPException
+from fastapi import APIRouter, Query, HTTPException
 import structlog
 
-from app.dependencies.auth import CurrentUser, OptionalUser, DbSession
+from app.dependencies.auth import OptionalUser, DbSession
 from app.schemas.common import APIResponse
 from app.schemas.era_transition import (
     ConcordanceLookupResponse,
-    EraTransitionCaseAnalysis,
     StatutoryVerbatimDiffResponse,
     TemporalInspectionRequest,
     TemporalInspectionResponse,
@@ -20,20 +18,10 @@ from app.services.era_transition_service import EraTransitionService
 from app.services.temporal_safeguard_service import temporal_safeguard_service
 from app.services.statutory_diff_service import statutory_diff_service
 from app.services.transitional_jurisprudence_service import transitional_jurisprudence_service
-from app.core.exceptions import InvalidCNRError
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/statutes", tags=["Statutes & Era Transition"])
-
-CNR_PATTERN = re.compile(r"^[A-Z]{4}\d{12}$")
-
-
-def _validate_cnr(cnr: str) -> str:
-    cnr = cnr.upper().strip()
-    if not (CNR_PATTERN.match(cnr) or cnr.isdigit()):
-        raise InvalidCNRError(cnr)
-    return cnr
 
 
 @router.get("/era-transition/lookup", response_model=APIResponse[ConcordanceLookupResponse])
@@ -117,33 +105,3 @@ def get_transitional_jurisprudence(
     """Retrieves curated landmark authorities resolving criminal reform transition ambiguities."""
     result = transitional_jurisprudence_service.list_jurisprudence(topic=topic, query=query)
     return APIResponse(data=result, message="Transitional jurisprudence retrieved successfully.")
-
-
-@router.get("/cases/{cnr}/era-transition", response_model=APIResponse[EraTransitionCaseAnalysis])
-async def get_case_era_transition(
-    cnr: str,
-    user: CurrentUser,
-    db: DbSession,
-):
-    """Generate or retrieve cached criminal era transition matrix and transposed pleading arguments."""
-    cnr = _validate_cnr(cnr)
-    service = EraTransitionService(db)
-    analysis = await service.analyze_case_transition(cnr)
-    if analysis is None:
-        return Response(status_code=204)
-    return APIResponse(data=analysis)
-
-
-@router.post("/cases/{cnr}/era-transition/refresh", response_model=APIResponse[EraTransitionCaseAnalysis])
-async def refresh_case_era_transition(
-    cnr: str,
-    user: CurrentUser,
-    db: DbSession,
-):
-    """Force re-generation of criminal era transition analysis and court pleading arguments."""
-    cnr = _validate_cnr(cnr)
-    service = EraTransitionService(db)
-    analysis = await service.analyze_case_transition(cnr, force_refresh=True)
-    if analysis is None:
-        return Response(status_code=204)
-    return APIResponse(data=analysis, message="Era transition analysis refreshed.")

@@ -7,7 +7,12 @@ import { EmptyState } from "@/components/common/EmptyState";
 import type { Bookmark as BookmarkType } from "@/types/chat";
 import { toast } from "sonner";
 
-export default function BookmarksPage() {
+interface BookmarksPageProps {
+  embedded?: boolean;
+  onCountChange?: (count: number) => void;
+}
+
+export default function BookmarksPage({ embedded = false, onCountChange }: BookmarksPageProps = {}) {
   const [bookmarks, setBookmarks] = useState<BookmarkType[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +20,9 @@ export default function BookmarksPage() {
     setLoading(true);
     try {
       const data = await bookmarkService.list();
-      setBookmarks(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setBookmarks(list);
+      onCountChange?.(list.length);
     } catch {
       toast.error("Failed to load bookmarks.");
     } finally {
@@ -30,7 +37,11 @@ export default function BookmarksPage() {
   const handleRemove = async (cnr: string) => {
     try {
       await bookmarkService.remove(cnr);
-      setBookmarks((prev) => prev.filter((b) => b.cnr !== cnr));
+      setBookmarks((prev) => {
+        const next = prev.filter((b) => b.cnr !== cnr);
+        onCountChange?.(next.length);
+        return next;
+      });
       toast.info("Bookmark removed.");
     } catch {
       toast.error("Failed to remove bookmark.");
@@ -38,16 +49,17 @@ export default function BookmarksPage() {
   };
 
   return (
-    <div className="dashboard-layout mt-4 sm:mt-9 w-full max-w-full">
-      {/* Centered Heading */}
-      <div className="text-center mb-6 sm:mb-8">
-        <h1
-          className="text-2xl font-medium"
-          style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
-        >
-          Bookmarked Cases
-        </h1>
-      </div>
+    <div className={embedded ? "w-full max-w-full" : "dashboard-layout mt-4 sm:mt-9 w-full max-w-full"}>
+      {!embedded && (
+        <div className="text-center mb-6 sm:mb-8">
+          <h1
+            className="text-2xl font-medium"
+            style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
+          >
+            Bookmarked Cases
+          </h1>
+        </div>
+      )}
 
       {loading ? (
         <SkeletonLoader count={4} height="76px" />

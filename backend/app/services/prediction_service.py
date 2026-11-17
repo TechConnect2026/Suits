@@ -283,7 +283,7 @@ Generate a structured JSON response matching the following structure:
 """
             target_max_tokens = 4096
 
-        # 7. Call AI Orchestrator (Local Ollama Qwen 7B if local/offline, else Gemini 3.5 Flash -> Groq)
+        # 7. Call AI Orchestrator (Local Ollama Qwen 7B if local/offline, else Gemini)
         raw_json = await ai_orchestrator.generate_json_gemini_first(
             system_prompt=system_prompt,
             user_prompt=user_prompt,

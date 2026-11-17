@@ -551,7 +551,7 @@ class OrderService:
                         "statutory_provisions_considered": raw.get("statutoryProvisionsConsidered") or raw.get("statutory_provisions_considered", []),
                         "operative_disposition": raw.get("operativeDisposition") or raw.get("outcome") or raw.get("dispositionStatus") or "Disposed",
                     },
-                    "model_attribution": "Unified Case Intelligence · InLegalBERT & Local Ollama" if ai_orchestrator.is_local() else "Unified Case Intelligence · InLegalBERT & Gemini/Groq",
+                    "model_attribution": "Unified Case Intelligence · InLegalBERT & Local Ollama" if ai_orchestrator.is_local() else "Unified Case Intelligence · InLegalBERT & Gemini",
                     "order_hash": order_hash,
                     "is_cached": True,
                     "generated_at": datetime.now(timezone.utc).isoformat(),

@@ -48,7 +48,9 @@ export function CommandPalette() {
   const quickLinks = [
     { label: "Dashboard", path: "/dashboard", shortcut: "G D" },
     { label: "Search Cases", path: "/search", shortcut: "G S" },
-    { label: "Bookmarks", path: "/bookmarks", shortcut: "G B" },
+    { label: "Library & Vault (Bookmarks)", path: "/vault?tab=bookmarks", shortcut: "G B" },
+    { label: "Library & Vault (Saved Judgments)", path: "/vault?tab=judgments", shortcut: "G R" },
+    { label: "Library & Vault (Uploaded Files)", path: "/vault?tab=documents", shortcut: "G F" },
     { label: "History", path: "/history", shortcut: "G H" },
     { label: "Analytics", path: "/analytics", shortcut: "G A" },
   ];

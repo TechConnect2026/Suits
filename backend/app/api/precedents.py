@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 import structlog
 
-from app.dependencies.auth import CurrentUser
+from app.dependencies.auth import CurrentUser, DbSession
 from app.schemas.common import APIResponse
 from app.schemas.precedents import (
     BatchRelevanceRequest,
@@ -55,10 +55,11 @@ async def get_batch_relevance_badges(
 async def get_verdict_anatomy(
     req: VerdictAnatomyRequest,
     user: CurrentUser,
+    db: DbSession,
 ) -> APIResponse[VerdictAnatomyResponse]:
     """Deconstructs a judgment into 4 structured modules: Issues, Material Facts, Ratio Decidendi, and Obiter Dicta."""
     try:
-        anatomy = await verdict_anatomy_service.get_verdict_anatomy(req)
+        anatomy = await verdict_anatomy_service.get_verdict_anatomy(req, db=db)
         return APIResponse(data=anatomy, message="Verdict anatomy structured successfully.")
     except Exception as exc:
         logger.error("get_verdict_anatomy_failed", error=str(exc))

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Scale,
@@ -17,10 +17,14 @@ import {
   ChevronRight,
   History,
   Users,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CaseDetails, OrderAI } from "@/types/case";
+import type { VerdictAnatomyResponse } from "@/types/precedents";
 import { caseService } from "@/services/cases";
+import { precedentService } from "@/services/precedents";
+import { VerdictAnatomyView } from "./VerdictAnatomyView";
 
 interface OrderIntelligenceCardProps {
   caseData?: CaseDetails | null;
@@ -29,7 +33,7 @@ interface OrderIntelligenceCardProps {
   onReadDocument?: (filename?: string) => void;
 }
 
-type TabType = "headnote" | "overview" | "procedural" | "issues" | "ratio" | "compliance";
+type TabType = "headnote" | "overview" | "procedural" | "issues" | "ratio" | "anatomy" | "compliance";
 
 export function OrderIntelligenceCard({
   caseData,
@@ -44,6 +48,8 @@ export function OrderIntelligenceCard({
   const [copiedHeadnote, setCopiedHeadnote] = useState<boolean>(false);
   const [copiedBrief, setCopiedBrief] = useState<boolean>(false);
   const [showObiter, setShowObiter] = useState<boolean>(false);
+  const [deepAnatomy, setDeepAnatomy] = useState<VerdictAnatomyResponse | null>(null);
+  const [anatomyLoading, setAnatomyLoading] = useState<boolean>(false);
 
   const cnr = caseData?.cnr || "";
   const targetFile =
@@ -194,6 +200,115 @@ export function OrderIntelligenceCard({
     setTimeout(() => setCopiedBrief(false), 2200);
   };
 
+  const derivedAnatomy = useMemo<VerdictAnatomyResponse | null>(() => {
+    if (!data) return null;
+    const isSC = courtName.toLowerCase().includes("supreme court");
+    const heldArr: string[] = (rawAi.held_points || rawAi.heldPoints || []).map((h: any) =>
+      typeof h === "string" ? h : h?.holding || h?.point || JSON.stringify(h)
+    );
+    const procStages: any[] = rawAi.procedural_history || rawAi.proceduralHistory || [];
+    const procJourney =
+      Array.isArray(procStages) && procStages.length > 0
+        ? procStages
+            .slice(0, 4)
+            .map((p: any) => (typeof p === "string" ? p : p?.stage || p?.court || p?.event || ""))
+            .filter(Boolean)
+            .join(" → ")
+        : "Proceedings adjudicated before the Hon'ble Court.";
+
+    const numericTid = /^\d+$/.test(cnr) ? Number(cnr) : undefined;
+
+    return {
+      case_title: caseTitle,
+      official_citation: caseNo !== "N/A" ? caseNo : `Indian Kanoon Record #${cnr || "Auth"}`,
+      kanoon_tid: numericTid,
+      kanoon_url: numericTid ? `https://indiankanoon.org/doc/${numericTid}/` : undefined,
+      court_name: courtName,
+      decision_date: orderDate,
+      bench_coram: judges.length > 0 ? judges : ["Hon'ble Bench"],
+      disposition: operativeDisposition,
+      issues_framed:
+        primaryIssues.length > 0
+          ? primaryIssues.map((q, idx) => ({
+              issue_number: idx + 1,
+              question_of_law: q,
+              court_finding: heldArr[idx] || courtReasoning || operativeDisposition,
+              answered_in_favour_of: "Neutral" as const,
+            }))
+          : [
+              {
+                issue_number: 1,
+                question_of_law: `Core statutory & legal determination in ${caseTitle}.`,
+                court_finding: operativeDisposition,
+                answered_in_favour_of: "Neutral" as const,
+              },
+            ],
+      material_facts: [
+        ...(executiveSummary ? [executiveSummary] : []),
+        ...petArguments.slice(0, 2).map((a) => `Petitioner Submission: ${a}`),
+        ...respArguments.slice(0, 2).map((a) => `Respondent Submission: ${a}`),
+      ],
+      procedural_journey: procJourney,
+      ratio_decidendi: {
+        core_rule_of_law: ratioDecidendi || heldArr[0] || executiveSummary || "Operative holding established by the Hon'ble Bench.",
+        binding_proposition: heldArr[0] || courtReasoning || ratioDecidendi || operativeDisposition,
+        governing_paragraphs: ["Operative Order / Ratio"],
+        bench_strength: judges.length > 1 ? `${judges.length}-Judge Bench` : "Hon'ble Bench",
+        precedential_weight: isSC ? "Binding Supreme Court Precedent" : "Binding High Court Precedent",
+      },
+      obiter_dicta: obiterDicta.map((obs) => ({
+        observation: obs,
+        context: "Judicial Observation",
+        nature: "General Observation",
+      })),
+      statutes_interpreted: statutesCited.slice(0, 8).map((s) => ({
+        act_name: s,
+        section_article: "Cited Provision",
+        nature_of_interpretation: "General Interpretation" as const,
+        interpretation_summary: "Applied by the Hon'ble Court in determining the core issues.",
+      })),
+      one_line_takeaway: (plainLanguage || ratioDecidendi || executiveSummary || operativeDisposition).slice(0, 260),
+    };
+  }, [
+    data,
+    cnr,
+    caseTitle,
+    caseNo,
+    courtName,
+    orderDate,
+    judges,
+    operativeDisposition,
+    primaryIssues,
+    executiveSummary,
+    courtReasoning,
+    ratioDecidendi,
+    petArguments,
+    respArguments,
+    obiterDicta,
+    statutesCited,
+    plainLanguage,
+    rawAi,
+  ]);
+
+  const handleDeepExtractAnatomy = async () => {
+    setAnatomyLoading(true);
+    try {
+      const numericTid = /^\d+$/.test(cnr) ? Number(cnr) : undefined;
+      const res = await precedentService.getVerdictAnatomy({
+        cnr: cnr || undefined,
+        tid: numericTid,
+        case_title: caseTitle,
+        court_name: courtName,
+      });
+      setDeepAnatomy(res);
+      toast.success("Verdict 4-Part Anatomy extracted!");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to deep-extract verdict anatomy.");
+    } finally {
+      setAnatomyLoading(false);
+    }
+  };
+
   // ─── Empty / On-Demand State ────────────────────────────────────────────────
   if (!data && !loading) {
     return null;
@@ -229,6 +344,7 @@ export function OrderIntelligenceCard({
     { id: "procedural", label: "Procedural History", icon: <History size={15} /> },
     { id: "issues", label: "Legal Issues", icon: <HelpCircle size={15} /> },
     { id: "ratio", label: "Ratio & Reasoning", icon: <Scale size={15} /> },
+    { id: "anatomy", label: "Verdict Anatomy", icon: <Layers size={15} /> },
     { id: "compliance", label: "Plain Language & Risks", icon: <ShieldAlert size={15} /> },
   ];
 
@@ -936,7 +1052,55 @@ export function OrderIntelligenceCard({
           </motion.div>
         )}
 
-        {/* ── TAB 6: PLAIN LANGUAGE & RISKS ────────────────────────────────── */}
+        {/* ── TAB 6: VERDICT 4-PART ANATOMY (MERGED ZERO-COST VIEW) ───────── */}
+        {activeTab === "anatomy" && (
+          <motion.div
+            key="anatomy"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18 }}
+            className="space-y-4"
+          >
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-xl border"
+              style={{ background: "var(--surface-raised)", borderColor: "var(--hairline)" }}
+            >
+              <div className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-dim)" }}>
+                <Sparkles size={14} style={{ color: "var(--brass)" }} />
+                <span>
+                  {deepAnatomy
+                    ? "Showing Deep Verdict Anatomy (Sudhansu Sekhar Misra Doctrine)"
+                    : "Synthesized instantaneously from cached Order Intelligence (0 extra AI tokens)"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleDeepExtractAnatomy}
+                disabled={anatomyLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+                style={{
+                  background: "var(--surface)",
+                  borderColor: "var(--hairline)",
+                  color: "var(--ink)",
+                }}
+              >
+                {anatomyLoading ? (
+                  <Loader2 size={13} className="animate-spin text-[var(--brass)]" />
+                ) : (
+                  <RefreshCw size={13} />
+                )}
+                <span>{anatomyLoading ? "Extracting..." : "Deep Re-Analyze"}</span>
+              </button>
+            </div>
+
+            {(deepAnatomy || derivedAnatomy) && (
+              <VerdictAnatomyView data={(deepAnatomy || derivedAnatomy)!} />
+            )}
+          </motion.div>
+        )}
+
+        {/* ── TAB 7: PLAIN LANGUAGE & RISKS ────────────────────────────────── */}
         {activeTab === "compliance" && (
           <motion.div
             key="compliance"

@@ -1,4 +1,4 @@
-"""Cache repository - database operations for cached eCourts data and local case search."""
+"""Cache repository - database operations for cached Indian Kanoon case data and local case search."""
 
 import json
 from datetime import datetime, timezone
@@ -126,6 +126,14 @@ class CacheRepository:
             )
         )
         return result.scalar_one_or_none()
+
+    async def get_latest_cached_ai_for_cnr(self, cnr: str) -> CachedAIAnalysis | None:
+        result = await self.db.execute(
+            select(CachedAIAnalysis)
+            .where(CachedAIAnalysis.cnr == cnr)
+            .order_by(CachedAIAnalysis.fetched_at.desc())
+        )
+        return result.scalars().first()
 
     async def save_cached_ai(self, cached_ai: CachedAIAnalysis) -> CachedAIAnalysis:
         existing = await self.get_cached_ai(cached_ai.cnr, cached_ai.filename)

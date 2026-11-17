@@ -278,7 +278,7 @@ class HeadnoteService:
                                 "statutory_provisions_considered": ai_raw.get("statutoryProvisionsConsidered") or ai_raw.get("statutory_provisions_considered", []),
                                 "operative_disposition": ai_raw.get("operativeDisposition") or ai_raw.get("outcome") or ai_raw.get("dispositionStatus") or "Disposed",
                             },
-                            "model_attribution": "Unified Case Intelligence · InLegalBERT & Gemini/Groq",
+                            "model_attribution": "Unified Case Intelligence · InLegalBERT & Gemini",
                             "order_hash": order_hash,
                             "is_cached": True,
                             "generated_at": datetime.now(timezone.utc).isoformat(),

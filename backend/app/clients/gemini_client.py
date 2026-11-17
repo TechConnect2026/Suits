@@ -59,7 +59,7 @@ class GeminiClient:
         return (
             "### AI Case Analysis Unavailable\n\n"
             "The Gemini AI service is currently unavailable. "
-            "Please try again later or check your GEMINI_API_KEY / GROQ_API_KEY configuration.\n\n"
+            "Please try again later or check your GEMINI_API_KEY configuration.\n\n"
             f"*Error: {error_msg}*" if error_msg else
             "The AI service is currently unavailable. Please try again later."
         )
@@ -71,52 +71,6 @@ class GeminiClient:
         seen: set[str] = set()
         return [m for m in candidates if not (m in seen or seen.add(m))]
 
-    async def _groq_fallback_generate(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        temperature: float = 0.3,
-        max_output_tokens: int = 4096,
-    ) -> str:
-        """Fallback to Groq Cloud (openai/gpt-oss-120b) when Gemini is unavailable."""
-        logger.info("gemini_triggering_groq_fallback_generate")
-        try:
-            from app.clients.groq_client import groq_client
-            result = await groq_client.generate(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=temperature,
-                max_output_tokens=max_output_tokens,
-            )
-            if result and result.strip():
-                logger.info("groq_fallback_generate_success", chars=len(result))
-                return result
-        except Exception as exc:
-            logger.error("gemini_groq_fallback_generate_failed", error=str(exc))
-        return self._get_fallback_analysis()
-
-    async def _groq_fallback_json(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        temperature: float = 0.2,
-    ) -> dict[str, Any] | list[Any]:
-        """Fallback to Groq Cloud (openai/gpt-oss-120b) for structured JSON when Gemini fails."""
-        logger.info("gemini_triggering_groq_fallback_json")
-        try:
-            from app.clients.groq_client import groq_client
-            result = await groq_client.generate_json(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=temperature,
-            )
-            if result is not None:
-                logger.info("groq_fallback_json_success")
-                return result
-        except Exception as exc:
-            logger.error("gemini_groq_fallback_json_failed", error=str(exc))
-        return {}
-
     async def generate(
         self,
         system_prompt: str,
@@ -126,16 +80,15 @@ class GeminiClient:
     ) -> str:
         """Send a prompt to Gemini and return the text response.
 
-        Falls back to Groq Cloud if Gemini credits are depleted or models fail.
         Does NOT fall back to OpenRouter.
         """
         if not self._ensure_configured():
-            logger.warning("gemini_generate_skipped_not_configured_trying_groq")
-            return await self._groq_fallback_generate(system_prompt, user_prompt, temperature, max_output_tokens)
+            logger.warning("gemini_generate_skipped_not_configured")
+            return self._get_fallback_analysis("Gemini API key is not configured.")
 
         if self._is_credits_depleted():
-            logger.warning("gemini_generate_skipped_credits_depleted_trying_groq")
-            return await self._groq_fallback_generate(system_prompt, user_prompt, temperature, max_output_tokens)
+            logger.warning("gemini_generate_skipped_credits_depleted")
+            return self._get_fallback_analysis("Gemini API credits depleted.")
 
         last_error = ""
         should_break_candidates = False
@@ -169,8 +122,8 @@ class GeminiClient:
                         continue
                     break
 
-        logger.error("gemini_all_models_failed_trying_groq", error=last_error)
-        return await self._groq_fallback_generate(system_prompt, user_prompt, temperature, max_output_tokens)
+        logger.error("gemini_all_models_failed", error=last_error)
+        return self._get_fallback_analysis(last_error)
 
     async def generate_json(
         self,
@@ -182,16 +135,15 @@ class GeminiClient:
         """Send a prompt to Gemini and return a parsed JSON dict.
 
         Uses response_mime_type='application/json' to guarantee valid JSON output.
-        Falls back to Groq Cloud if Gemini credits are depleted or models fail.
         Does NOT fall back to OpenRouter.
         """
         if not self._ensure_configured():
-            logger.warning("gemini_generate_json_skipped_not_configured_trying_groq")
-            return await self._groq_fallback_json(system_prompt, user_prompt, temperature)
+            logger.warning("gemini_generate_json_skipped_not_configured")
+            return {}
 
         if self._is_credits_depleted():
-            logger.warning("gemini_generate_json_skipped_credits_depleted_trying_groq")
-            return await self._groq_fallback_json(system_prompt, user_prompt, temperature)
+            logger.warning("gemini_generate_json_skipped_credits_depleted")
+            return {}
 
         last_error = ""
         should_break_candidates = False
@@ -230,8 +182,8 @@ class GeminiClient:
                         continue
                     break
 
-        logger.error("gemini_json_all_models_failed_trying_groq", error=last_error)
-        return await self._groq_fallback_json(system_prompt, user_prompt, temperature)
+        logger.error("gemini_json_all_models_failed", error=last_error)
+        return {}
 
     async def extract_markdown_from_pdf(self, pdf_bytes: bytes) -> str:
         """Extract and format court order text from PDF bytes using Gemini's vision capability.
@@ -306,20 +258,6 @@ class GeminiClient:
         ]
 
         if not self._ensure_configured() or self._is_credits_depleted():
-            try:
-                from app.clients.groq_client import groq_client
-                groq_resp = await groq_client.generate_json(
-                    system_prompt="You are a legal assistant. Output valid JSON.",
-                    user_prompt=prompt,
-                    temperature=0.6,
-                    max_output_tokens=512,
-                )
-                if isinstance(groq_resp, list) and groq_resp:
-                    return [str(q) for q in groq_resp[:n]]
-                if isinstance(groq_resp, dict) and "questions" in groq_resp and isinstance(groq_resp["questions"], list):
-                    return [str(q) for q in groq_resp["questions"][:n]]
-            except Exception:
-                pass
             return default_questions
 
         prompt = (
@@ -353,21 +291,6 @@ class GeminiClient:
                     break
                 continue
 
-        try:
-            from app.clients.groq_client import groq_client
-            groq_resp = await groq_client.generate_json(
-                system_prompt="You are a legal assistant. Output valid JSON.",
-                user_prompt=prompt,
-                temperature=0.6,
-                max_output_tokens=512,
-            )
-            if isinstance(groq_resp, list) and groq_resp:
-                return [str(q) for q in groq_resp[:n]]
-            if isinstance(groq_resp, dict) and "questions" in groq_resp and isinstance(groq_resp["questions"], list):
-                return [str(q) for q in groq_resp["questions"][:n]]
-        except Exception:
-            pass
-
         return default_questions
 
     async def generate_with_context(
@@ -379,10 +302,7 @@ class GeminiClient:
         order_context: str | None = None,
         temperature: float = 0.3,
     ) -> str:
-        """Generate a response with full conversation context.
-
-        Falls back to Groq Cloud if Gemini is unavailable.
-        """
+        """Generate a response with full conversation context."""
         context_parts = [f"## Case Information\n{case_context}"]
 
         if order_context:
@@ -421,10 +341,7 @@ class GeminiClient:
         order_context: str | None = None,
         temperature: float = 0.3,
     ):
-        """Generate a response with full conversation context (Streaming).
-
-        Streams Gemini output or falls back to Groq Cloud (openai/gpt-oss-120b).
-        """
+        """Generate a response with full conversation context (Streaming)."""
         context_parts = [f"## Case Information\n{case_context}"]
         if order_context:
             context_parts.append(f"## Relevant Order\n{order_context}")
@@ -474,21 +391,8 @@ class GeminiClient:
                         break
                     continue
 
-        # Stream via Groq as fallback
-        logger.warning("gemini_stream_all_models_failed_trying_groq")
-        from app.clients.groq_client import groq_client
-        groq_text = await groq_client.generate(
-            system_prompt=system_prompt,
-            user_prompt=full_prompt,
-            temperature=temperature,
-        )
-        if groq_text:
-            chunk_size = 40
-            for i in range(0, len(groq_text), chunk_size):
-                yield groq_text[i:i + chunk_size]
-                await asyncio.sleep(0.01)
-        else:
-            yield "The AI service is currently unavailable. Please try again later."
+        logger.warning("gemini_stream_all_models_failed")
+        yield "The AI service is currently unavailable. Please try again later."
 
 
 # Singleton instance

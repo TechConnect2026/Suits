@@ -211,7 +211,7 @@ class DraftingTemplatesService:
 
         logger.info("generating_pleading", template=request.template_id.value, applicant=request.applicant_name)
 
-        # Call AI orchestrator (routes to Gemini/Groq or local Ollama Qwen)
+        # Call AI orchestrator (routes to Gemini or local Ollama Qwen)
         raw_output = await self.orchestrator.generate_text(
             prompt=prompt,
             system_prompt=DRAFTING_SYSTEM_PROMPT,

@@ -1,4 +1,4 @@
-"""Search service - handles search logic, local DB lookup, eCourts API fetching, and caching."""
+"""Search service - handles search logic, Indian Kanoon API fetching, local DB lookup, and caching."""
 
 import json
 import hashlib
@@ -9,10 +9,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
-from app.clients.ecourts_client import ecourts_client
 from app.clients.kanoon_client import kanoon_client
 from app.core.config import settings
-from app.core.exceptions import ECourtsAPIError
 from app.models.cached_case import CachedCase
 from app.repositories.cache_repository import CacheRepository
 from app.schemas.search import SearchRequest, SearchResponse, SearchResultItem, SearchCapabilitiesResponse
@@ -30,7 +28,7 @@ RESERVED_METADATA_KEYS = {
 
 
 def _build_search_params(request: SearchRequest) -> dict[str, Any]:
-    """Convert SearchRequest into eCourts API query parameters."""
+    """Convert SearchRequest into normalized search query parameters."""
     params: dict[str, Any] = {}
     if request.query:
         params["query"] = request.query
@@ -119,7 +117,7 @@ def _raw_to_search_item(item: dict[str, Any] | str) -> SearchResultItem | None:
     if not isinstance(item, dict):
         return None
 
-    # Support both eCourts cnr/id and Kanoon tid
+    # Support both cached cnr/id and Kanoon tid
     cnr = str(item.get("tid", item.get("cnr", item.get("caseNumberRecord", item.get("case_number", item.get("id", "")))))).strip()
     if not cnr or cnr.lower() in RESERVED_METADATA_KEYS:
         return None
@@ -131,7 +129,7 @@ def _raw_to_search_item(item: dict[str, Any] | str) -> SearchResultItem | None:
     acts_and_sections = _ensure_list(item.get("actsAndSections", item.get("acts_and_sections")))
     ai_keywords = _ensure_list(item.get("aiKeywords", item.get("ai_keywords")))
 
-    # Indian Kanoon uses "title", eCourts uses "case_title"
+    # Indian Kanoon uses "title", cached records may use "case_title"
     case_title = item.get("title", item.get("case_title", item.get("caseTitle", _make_case_title(petitioners, respondents))))
     
     # Strip HTML tags and normalize unicode characters
@@ -352,7 +350,7 @@ class SearchService:
 
         1. Check Redis search cache
         2. Query local database (CachedCase table) for existing matches
-        3. If NOT found in local database -> execute eCourts API call
+        3. If NOT found in live Kanoon API -> fallback to local database
         4. Apply strict filters (case_status, case_type, filing_year, court_code)
         5. Return filtered SearchResponse
         """

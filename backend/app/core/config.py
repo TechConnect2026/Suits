@@ -34,10 +34,6 @@ class Settings(BaseSettings):
     jwt_refresh_token_expire_days: int = Field(default=7)
     jwt_algorithm: str = Field(default="HS256")
 
-    # eCourts Partner API
-    ecourts_api_key: str = Field(default="")
-    ecourts_base_url: str = Field(default="https://webapi.ecourtsindia.com")
-
     # Indian Kanoon API
     kanoon_api_token: str = Field(default="")
 
@@ -49,10 +45,6 @@ class Settings(BaseSettings):
     openrouter_api_key: str = Field(default="")
     openrouter_model: str = Field(default="openrouter/free")
     openrouter_max_tokens: int = Field(default=2048)
-
-    # Groq Cloud API (Gemini fallback — openai/gpt-oss-120b or llama-3.3-70b-versatile)
-    groq_api_key: str = Field(default="")
-    groq_model: str = Field(default="openai/gpt-oss-120b")
 
     # Local Ollama AI (Offline / Manual Local AI Mode — Qwen 7B)
     ollama_base_url: str = Field(default="http://localhost:11434")
@@ -89,10 +81,6 @@ class Settings(BaseSettings):
     # Cache TTLs (seconds)
     cache_ttl_search: int = Field(default=900)       # 15 minutes
     cache_ttl_case: int = Field(default=1800)         # 30 minutes
-    cache_ttl_enums: int = Field(default=86400)       # 24 hours
-    cache_ttl_court_structure: int = Field(default=604800)  # 7 days
-    cache_ttl_available_dates: int = Field(default=86400)   # 24 hours
-    cache_ttl_cause_list: int = Field(default=900)    # 15 minutes
 
     @property
     def cors_origins_list(self) -> list[str]:

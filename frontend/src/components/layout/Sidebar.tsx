@@ -16,28 +16,11 @@ function WorkspaceIcon() {
     </svg>
   );
 }
-function BookmarkIcon() {
+function VaultIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M6 3h12v18l-6-4-6 4z" />
-    </svg>
-  );
-}
-function FilesIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-      <path d="M12 11v6M9 14h6" strokeWidth="1.5" />
-    </svg>
-  );
-}
-function ResearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6" />
-      <circle cx="11.5" cy="14.5" r="2.5" />
-      <path d="m13.5 16.5 2.5 2.5" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+      <path d="M8 7h8M8 11h6" />
     </svg>
   );
 }
@@ -94,10 +77,8 @@ function ScalesIcon() {
 
 const navItems = [
   { path: "/dashboard",  label: "Workspace",  Icon: WorkspaceIcon },
-  { path: "/bookmarks",  label: "Bookmarks",  Icon: BookmarkIcon },
-  { path: "/files",      label: "Files",      Icon: FilesIcon },
+  { path: "/vault",      label: "Vault",      Icon: VaultIcon },
   { path: "/document",   label: "Document",   Icon: DocumentIcon },
-  { path: "/research",   label: "Research",   Icon: ResearchIcon },
   { path: "/chat",       label: "Chatbot",    Icon: ChatbotIcon },
   { path: "/transition", label: "Transition", Icon: TransitionIcon },
   { path: "/analytics",  label: "Analytics",  Icon: AnalyticsIcon },

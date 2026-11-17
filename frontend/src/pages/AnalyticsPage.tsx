@@ -3,7 +3,7 @@ import {
   TrendingUp,
   Activity,
   Scale,
-  Flame,
+  Bookmark,
   RotateCw,
   Landmark,
 } from "lucide-react";
@@ -96,9 +96,9 @@ export default function AnalyticsPage() {
       {/* ── Metric Cards ───────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          title="Current Practice Streak"
-          value={`${data?.activity_trends?.current_streak_days ?? 0} Days`}
-          icon={<Flame size={18} style={{ color: "#DC641E" }} />}
+          title="Saved Case Dockets"
+          value={data?.bookmarks ?? 0}
+          icon={<Bookmark size={18} style={{ color: "var(--brass-bright)" }} />}
         />
         <MetricCard
           title="Statutes Analyzed"

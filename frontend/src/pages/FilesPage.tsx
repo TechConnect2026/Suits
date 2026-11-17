@@ -25,7 +25,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { documentService } from "@/services/document";
 import { DocumentReaderModal } from "@/components/case/DocumentReaderModal";
-import { CounterPleadingModal } from "@/components/defense/CounterPleadingModal";
+import { AdversarialDefenseSuiteModal } from "@/components/defense/AdversarialDefenseSuiteModal";
 import type { UserDocument, DocumentTag, DocumentFilters, DocumentStats } from "@/types/document";
 import { DOCUMENT_TAG_LABELS, DOCUMENT_STATUS_LABELS } from "@/types/document";
 
@@ -235,8 +235,13 @@ function UploadModal({ onClose, onSuccess }: UploadModalProps) {
   );
 }
 
+interface FilesPageProps {
+  embedded?: boolean;
+  onCountChange?: (count: number) => void;
+}
+
 // ─────────────────────────────────────────────────── Main Page ──
-export default function FilesPage() {
+export default function FilesPage({ embedded = false, onCountChange }: FilesPageProps = {}) {
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<UserDocument[]>([]);
   const [stats, setStats] = useState<DocumentStats | null>(null);
@@ -298,6 +303,10 @@ export default function FilesPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    onCountChange?.(documents.length);
+  }, [documents.length, onCountChange]);
 
   // Polling for processing documents with backoff and timeout
   useEffect(() => {
@@ -383,20 +392,26 @@ export default function FilesPage() {
   };
 
   return (
-    <div className="dashboard-layout max-w-[1150px] mx-auto p-3 sm:p-6 pb-16">
-      {/* Page Header */}
-      <div className="flex items-start justify-between mb-5 sm:mb-7 gap-4 flex-wrap">
-        <div>
-          <h1
-            className="text-xl sm:text-2xl font-semibold"
-            style={{ color: "var(--ink)", fontFamily: "var(--font-display)", margin: 0, lineHeight: 1.2 }}
-          >
-            Evidence & Document Vault
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--ink-faint)" }}>
-            Upload private legal documents. SUIT automatically performs OCR, structured legal analysis, and full-text research indexing.
+    <div className={embedded ? "w-full max-w-full pb-12" : "dashboard-layout max-w-[1150px] mx-auto p-3 sm:p-6 pb-16"}>
+      {/* Page Header / Action Bar */}
+      <div className={`flex items-start justify-between gap-4 flex-wrap ${embedded ? "mb-4" : "mb-5 sm:mb-7"}`}>
+        {!embedded ? (
+          <div>
+            <h1
+              className="text-xl sm:text-2xl font-semibold"
+              style={{ color: "var(--ink)", fontFamily: "var(--font-display)", margin: 0, lineHeight: 1.2 }}
+            >
+              Evidence & Document Vault
+            </h1>
+            <p className="text-sm mt-1" style={{ color: "var(--ink-faint)" }}>
+              Upload private legal documents. SUIT automatically performs OCR, structured legal analysis, and full-text research indexing.
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs self-center" style={{ color: "var(--ink-faint)" }}>
+            Upload private pleadings, FIRs, or contracts for automatic Multimodal Gemini OCR &amp; semantic vector indexing.
           </p>
-        </div>
+        )}
         <button
           onClick={() => setShowUpload(true)}
           className="btn btn-primary flex items-center gap-2 shadow-sm"
@@ -642,11 +657,12 @@ export default function FilesPage() {
         />
       )}
 
-      {/* Counter-Pleading / Written Statement Modal */}
+      {/* Unified Adversarial Defense Suite Modal */}
       {defenseDocId && (
-        <CounterPleadingModal
+        <AdversarialDefenseSuiteModal
           isOpen={!!defenseDocId}
           preselectedDocId={defenseDocId}
+          initialTab="written_statement"
           onClose={() => setDefenseDocId(null)}
           onOpenInEditor={handleOpenDefenseDraftInEditor}
         />
