@@ -66,8 +66,14 @@ class GeminiClient:
 
     def _model_candidates(self) -> list[str]:
         """Return ordered list of verified healthy models to try."""
-        primary = settings.gemini_model or "gemini-3.1-flash-lite"
-        candidates = [primary, "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-pro"]
+        primary = settings.gemini_model or "gemini-3.5-flash-lite"
+        candidates = [
+            primary,
+            "gemini-3.5-flash-lite",
+            "gemini-3-flash-preview",
+            "gemini-flash-lite-latest",
+            "gemini-3.1-flash-lite",
+        ]
         seen: set[str] = set()
         return [m for m in candidates if not (m in seen or seen.add(m))]
 

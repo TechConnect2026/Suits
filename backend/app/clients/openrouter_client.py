@@ -29,14 +29,11 @@ logger = structlog.get_logger()
 # Verified live models on OpenRouter with free tier (:free)
 # ---------------------------------------------------------------------------
 _FREE_MODEL_POOL: list[str] = [
-    "baidu/ernie-5.5-flash-preview:free",        # Verified: fast direct JSON output
-    "cohere/north-mini-code:free",               # Verified: fast direct JSON output
-    "particle-ai/particle-1:free",               # Verified: fast direct JSON output
-    "nvidia/nemotron-3-ultra-550b-a55b:free",    # Verified: fast direct JSON output
-    "openrouter/free",                           # Auto-router fallback
-    "nvidia/nemotron-3.5-lightning:free",        # Fast text & reasoning
-    "inclusionai/ling-3.2-flash:free",           # Fast text
-    "liquid/lfm-3-1.7b:free",                    # Fast text
+    "openrouter/free",                           # OpenRouter auto-router across all healthy free models
+    "meta-llama/llama-3.3-70b-instruct:free",   # Llama 3.3 70B Free
+    "google/gemma-2-9b-it:free",                # Gemma 2 9B Free
+    "mistralai/mistral-7b-instruct:free",       # Mistral 7B Free
+    "qwen/qwen-2.5-72b-instruct:free",          # Qwen 2.5 72B Free
 ]
 
 # Error status codes that indicate rate limiting / overload (trigger cooldown)
@@ -129,8 +126,11 @@ def _get_preferred_model() -> str | None:
 
 
 def _is_rate_limit_error(exc: Exception) -> tuple[bool, float]:
-    """Returns (is_rate_limit, retry_after_seconds). Also handles 404 dead slugs and 402 credit exhaustion."""
+    """Returns (is_rate_limit, retry_after_seconds). Also handles 404 dead slugs, 401 auth, and 402 credit exhaustion."""
     msg = str(exc)
+    # Check for invalid auth / deleted user (401): cooldown for 1 hour
+    if "401" in msg or "user not found" in msg.lower() or "unauthorized" in msg.lower():
+        return True, 3600.0  # 1 hour
     # Check for dead model (404 / unavailable for free): cooldown for 24h
     if "404" in msg or "unavailable for free" in msg.lower() or "no endpoints found" in msg.lower():
         return True, 86400.0  # 24 hours
@@ -286,6 +286,8 @@ class OpenRouterClient:
                     _router.mark_rate_limited(model, retry_after)
                 else:
                     logger.warning("openrouter_generate_failed", model=model, error=str(exc))
+                if "401" in str(exc) or "user not found" in str(exc).lower():
+                    break
                 continue
 
         raise RuntimeError(f"All OpenRouter models failed: {last_error}")
@@ -394,6 +396,8 @@ class OpenRouterClient:
                     _router.mark_rate_limited(model, retry_after)
                 else:
                     logger.warning("openrouter_json_failed", model=model, error=str(exc))
+                if "401" in str(exc) or "user not found" in str(exc).lower():
+                    break
                 continue
 
         raise RuntimeError(f"All OpenRouter models failed (JSON): {last_error}")
@@ -434,6 +438,8 @@ class OpenRouterClient:
                     _router.mark_rate_limited(model, retry_after)
                 else:
                     logger.warning("openrouter_context_failed", model=model, error=str(exc))
+                if "401" in str(exc) or "user not found" in str(exc).lower():
+                    break
                 continue
 
         raise RuntimeError(f"All OpenRouter models failed (context): {last_error}")
@@ -488,6 +494,8 @@ class OpenRouterClient:
                     _router.mark_rate_limited(model, retry_after)
                 else:
                     logger.warning("openrouter_stream_failed", model=model, error=str(exc))
+                if "401" in str(exc) or "user not found" in str(exc).lower():
+                    break
                 continue
 
         raise RuntimeError(f"All OpenRouter models failed (stream): {last_error}")

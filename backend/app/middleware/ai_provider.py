@@ -80,6 +80,17 @@ class AIProviderMiddleware(BaseHTTPMiddleware):
         byok_token = active_byok_provider.set(byok_instance)
         user_id_token = active_user_id.set(user_uuid)
 
+        def _safe_reset():
+            for var, tok in (
+                (active_ai_provider, mode_token),
+                (active_byok_provider, byok_token),
+                (active_user_id, user_id_token),
+            ):
+                try:
+                    var.reset(tok)
+                except Exception:
+                    pass
+
         try:
             response = await call_next(request)
             response.headers["X-AI-Provider"] = provider_mode
@@ -96,20 +107,13 @@ class AIProviderMiddleware(BaseHTTPMiddleware):
                         async for chunk in original_iterator:
                             yield chunk
                     finally:
-                        active_ai_provider.reset(mode_token)
-                        active_byok_provider.reset(byok_token)
-                        active_user_id.reset(user_id_token)
+                        _safe_reset()
 
                 response.body_iterator = wrapped_stream()
                 return response
 
+            _safe_reset()
             return response
         except Exception:
-            active_ai_provider.reset(mode_token)
-            active_byok_provider.reset(byok_token)
-            active_user_id.reset(user_id_token)
+            _safe_reset()
             raise
-        else:
-            active_ai_provider.reset(mode_token)
-            active_byok_provider.reset(byok_token)
-            active_user_id.reset(user_id_token)
