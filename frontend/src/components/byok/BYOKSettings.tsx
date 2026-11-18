@@ -48,10 +48,6 @@ const PROVIDERS: Record<SupportedProvider, ProviderMeta> = {
     recommendedModel: "gemini-3.1-flash-lite",
     availableModels: [
       "gemini-3.1-flash-lite",
-      "gemini-3.5-flash-lite",
-      "gemini-flash-latest",
-      "gemini-3.1-flash-lite-preview",
-      "gemini-3.1-pro-preview",
     ],
     keyPrefixHint: "Starts with AQ... or AIzaSy...",
     brandColor: "#4285F4",
@@ -133,7 +129,6 @@ const PROVIDERS: Record<SupportedProvider, ProviderMeta> = {
     recommendedModel: "openrouter/auto",
     availableModels: [
       "openrouter/auto",
-      "google/gemini-2.0-flash-001",
       "meta-llama/llama-3.3-70b-instruct",
       "anthropic/claude-3.5-haiku",
     ],

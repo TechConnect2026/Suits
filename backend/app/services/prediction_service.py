@@ -396,7 +396,7 @@ Generate a structured JSON response matching the following structure:
             ),
         )
 
-        model_name = settings.prediction_gemini_model or "gemini-3.1-pro-preview"
+        model_name = settings.prediction_gemini_model or "gemini-3.1-flash-lite"
         response = CasePredictionResponse(
             target_cnr=cnr_clean,
             matter_type=matter_type,

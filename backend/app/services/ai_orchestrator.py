@@ -130,7 +130,7 @@ class AIOrchestrator:
         force_provider: str | None = None,
         user_id: Any | None = None,
     ) -> dict[str, Any]:
-        """Generate structured JSON routing User BYOK -> Gemini (gemini-3.5-flash) -> Groq fallback."""
+        """Generate structured JSON routing User BYOK -> Gemini (gemini-3.1-flash-lite) -> Groq fallback."""
         use_local = (force_provider == "ollama") or (force_provider is None and self.is_local())
 
         if use_local:

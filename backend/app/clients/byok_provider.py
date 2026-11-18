@@ -23,7 +23,7 @@ import structlog
 logger = structlog.get_logger()
 
 _DEFAULT_MODELS = {
-    "gemini": "gemini-3.5-flash-lite",
+    "gemini": "gemini-3.1-flash-lite",
     "openai": "gpt-4o-mini",
     "claude": "claude-3-7-sonnet-20250219",
     "openrouter": "openrouter/auto",
@@ -31,14 +31,19 @@ _DEFAULT_MODELS = {
 }
 
 _GEMINI_ALIASES: dict[str, str] = {
-    "gemini-3.5-flash": "gemini-3.5-flash-lite",
-    "gemini-3.1-flash": "gemini-3.5-flash-lite",
-    "gemini-3-flash": "gemini-3.5-flash-lite",
-    "gemini-2.5-flash": "gemini-3.5-flash-lite",
-    "gemini-2.5-flash-lite": "gemini-3.5-flash-lite",
-    "gemini-2.0-flash": "gemini-3.5-flash-lite",
-    "gemini-1.5-flash": "gemini-3.5-flash-lite",
-    "gemini-3.1-pro": "gemini-3.1-pro-preview",
+    "gemini-3.5-flash": "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite": "gemini-3.1-flash-lite",
+    "gemini-3.1-flash": "gemini-3.1-flash-lite",
+    "gemini-3-flash": "gemini-3.1-flash-lite",
+    "gemini-3-flash-preview": "gemini-3.1-flash-lite",
+    "gemini-2.5-flash": "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash": "gemini-3.1-flash-lite",
+    "gemini-1.5-flash": "gemini-3.1-flash-lite",
+    "gemini-3.1-pro": "gemini-3.1-flash-lite",
+    "gemini-3.1-pro-preview": "gemini-3.1-flash-lite",
+    "gemini-flash-latest": "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest": "gemini-3.1-flash-lite",
 }
 
 
@@ -98,7 +103,7 @@ class BYOKProvider:
         self.api_key = api_key.strip()
         raw_model = (model_preference or _DEFAULT_MODELS.get(self.provider) or "gpt-4o-mini").strip()
         if self.provider == "gemini":
-            self.model = _GEMINI_ALIASES.get(raw_model, raw_model)
+            self.model = "gemini-3.1-flash-lite"
         else:
             self.model = raw_model
         self.timeout = 60.0
@@ -111,8 +116,8 @@ class BYOKProvider:
         start = time.monotonic()
         try:
             if self.provider == "gemini":
-                # Google Gemini test with automatic model fallback across 3.X live tiers
-                candidate_models = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
+                # Google Gemini test strictly using gemini-3.1-flash-lite
+                candidate_models = ["gemini-3.1-flash-lite"]
                 seen: set[str] = set()
                 candidates = [m for m in candidate_models if not (m in seen or seen.add(m))]
                 last_error = ""
@@ -261,7 +266,7 @@ class BYOKProvider:
         """Generate structured JSON response."""
         json_sys_prompt = f"{system_prompt}\n\nIMPORTANT: You MUST respond ONLY with valid RFC-8259 JSON. Do not include markdown fences or explanation."
         if self.provider == "gemini":
-            candidate_models = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
+            candidate_models = ["gemini-3.1-flash-lite"]
             seen_m: set[str] = set()
             candidates = [m for m in candidate_models if not (m in seen_m or seen_m.add(m))]
             last_resp: httpx.Response | None = None
@@ -396,7 +401,7 @@ class BYOKProvider:
         return "\n\n".join(parts)
 
     async def _generate_gemini_text(self, prompt: str, system_prompt: str, temperature: float, max_tokens: int) -> str:
-        candidate_models = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
+        candidate_models = ["gemini-3.1-flash-lite"]
         seen_m: set[str] = set()
         candidates = [m for m in candidate_models if not (m in seen_m or seen_m.add(m))]
         last_resp: httpx.Response | None = None
@@ -426,7 +431,7 @@ class BYOKProvider:
         raise ValueError("Gemini returned empty response.")
 
     async def _generate_gemini_chat(self, system_prompt: str, history: list[dict[str, str]], prompt: str, temperature: float) -> str:
-        candidate_models = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
+        candidate_models = ["gemini-3.1-flash-lite"]
         seen_m: set[str] = set()
         candidates = [m for m in candidate_models if not (m in seen_m or seen_m.add(m))]
         contents = []
@@ -462,7 +467,7 @@ class BYOKProvider:
         raise ValueError("Gemini chat returned empty response.")
 
     async def _stream_gemini(self, system_prompt: str, history: list[dict[str, str]], prompt: str, temperature: float) -> AsyncGenerator[str, None]:
-        candidate_models = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
+        candidate_models = ["gemini-3.1-flash-lite"]
         seen_m: set[str] = set()
         candidates = [m for m in candidate_models if not (m in seen_m or seen_m.add(m))]
         contents = []
