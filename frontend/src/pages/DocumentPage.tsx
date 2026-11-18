@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { LegalEditor } from "@/components/document/LegalEditor";
 import { DocumentChatDrawer } from "@/components/document/DocumentChatDrawer";
-import { CounterPleadingModal } from "@/components/defense/CounterPleadingModal";
 import { DraftingTemplateModal } from "@/components/document/DraftingTemplateModal";
-import { AdversarialStrategyModal } from "@/components/defense/AdversarialStrategyModal";
+import { AdversarialDefenseSuiteModal } from "@/components/defense/AdversarialDefenseSuiteModal";
 import {
   FileText,
   Plus,
@@ -13,9 +13,9 @@ import {
   Clock,
   ChevronRight,
   BookOpen,
-  ShieldAlert,
   Gavel,
   Swords,
+  Monitor,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -110,6 +110,7 @@ const DEFAULT_SAMPLE_DRAFT: DraftItem = {
 };
 
 export default function DocumentPage() {
+  const navigate = useNavigate();
   const [drafts, setDrafts] = useState<DraftItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -130,9 +131,8 @@ export default function DocumentPage() {
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(new Date());
   const [showDraftsDrawer, setShowDraftsDrawer] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showDefenseModal, setShowDefenseModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [showAdversarialModal, setShowAdversarialModal] = useState(false);
+  const [showDefenseSuiteModal, setShowDefenseSuiteModal] = useState(false);
 
   const activeDraft = drafts.find((d) => d.id === activeDraftId) || drafts[0];
 
@@ -255,13 +255,61 @@ export default function DocumentPage() {
   };
 
   return (
-    <div className="dashboard-layout pb-24" style={{ maxWidth: "100%", width: "100%", marginTop: 36 }}>
-      {/* ── Page Header / Sub-navigation ── */}
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-3 flex-wrap">
+    <div className="dashboard-layout pb-24" style={{ maxWidth: "100%", width: "100%" }}>
+      {/* ── Mobile Notice (< 768px): Desktop-Exclusive Fallback ── */}
+      <div className="md:hidden flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8 space-y-6">
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-sm"
+          style={{
+            background: "var(--brass-soft)",
+            color: "var(--brass)",
+            border: "1px solid var(--hairline)",
+          }}
+        >
+          <Monitor size={32} />
+        </div>
+
+        <div className="space-y-2 max-w-sm">
+          <span
+            className="text-[11px] font-mono uppercase tracking-wider font-semibold px-2.5 py-1 rounded inline-block"
+            style={{
+              background: "var(--surface-container)",
+              color: "var(--brass-bright)",
+              border: "1px solid var(--hairline-soft)",
+            }}
+          >
+            Desktop Exclusive
+          </span>
+          <h2
+            className="text-2xl font-semibold tracking-tight pt-1"
+            style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
+          >
+            Document Studio
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--ink-dim)" }}>
+            The Legal Document Studio, court margin formatting, and live legal drafting tools are designed exclusively for desktop displays.
+          </p>
+          <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+            Please open SUIT on a desktop or laptop to draft, format, and print court-ready legal pleadings.
+          </p>
+        </div>
+
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="btn btn-primary px-5 py-2.5 text-xs font-semibold rounded-lg flex items-center gap-2 shadow-sm transition-transform active:scale-95 cursor-pointer"
+        >
+          <span>Return to Workspace</span>
+        </button>
+      </div>
+
+      {/* ── Desktop Document Studio (≥ 768px) ── */}
+      <div className="hidden md:block">
+        {/* ── Page Header / Sub-navigation ── */}
+        <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-nowrap w-full pb-1">
           <button
             onClick={() => setShowDraftsDrawer(!showDraftsDrawer)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap"
             style={{
               background: "var(--surface-container)",
               color: "var(--ink)",
@@ -276,7 +324,7 @@ export default function DocumentPage() {
 
           <button
             onClick={handleCreateNewDraft}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer shrink-0 whitespace-nowrap"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
@@ -289,7 +337,7 @@ export default function DocumentPage() {
 
           <button
             onClick={() => setShowTemplateModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer shrink-0 whitespace-nowrap"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
@@ -302,31 +350,17 @@ export default function DocumentPage() {
           </button>
 
           <button
-            onClick={() => setShowAdversarialModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer hover:opacity-90 active:scale-95"
+            onClick={() => setShowDefenseSuiteModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer hover:opacity-90 active:scale-95 shrink-0 whitespace-nowrap"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
               border: "1px solid var(--brass)",
             }}
-            title="Strategic Adversarial War Room: 4-Column Opposition Matrix, Stay Analyzer & Weakness Radar"
+            title="Unified Adversarial Defense Suite: Opposition Matrix, Stay Analyzer, Weakness Radar & Order VIII Written Statement"
           >
             <Swords size={14} />
-            <span>Adversarial War Room</span>
-          </button>
-
-          <button
-            onClick={() => setShowDefenseModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer"
-            style={{
-              background: "var(--surface-container)",
-              color: "var(--ink)",
-              border: "1px solid var(--hairline)",
-            }}
-            title="Synthesize court-ready Written Statement under Order VIII CPC"
-          >
-            <ShieldAlert size={14} style={{ color: "var(--brass)" }} />
-            <span>Draft Defense / WS</span>
+            <span>Adversarial Defense Suite</span>
           </button>
         </div>
       </div>
@@ -420,7 +454,7 @@ export default function DocumentPage() {
           lastSavedAt={lastSavedAt}
           isFullscreen={isFullscreen}
           onFullscreenChange={setIsFullscreen}
-          onOpenAdversarial={() => setShowAdversarialModal(true)}
+          onOpenAdversarial={() => setShowDefenseSuiteModal(true)}
         />
       )}
 
@@ -437,21 +471,16 @@ export default function DocumentPage() {
         onOpenInEditor={handleOpenTemplateDraft}
       />
 
-      {/* ── Adversarial Defense Engine Modal (Order VIII CPC) ── */}
-      <CounterPleadingModal
-        isOpen={showDefenseModal}
-        onClose={() => setShowDefenseModal(false)}
-        onOpenInEditor={handleOpenDefenseDraft}
-      />
-
-      {/* ── Strategic Adversarial War Room Modal (Pillar 2) ── */}
-      <AdversarialStrategyModal
-        isOpen={showAdversarialModal}
-        onClose={() => setShowAdversarialModal(false)}
+      {/* ── Unified Adversarial Defense Suite Modal (Matrix + Stay + Radar + Written Statement) ── */}
+      <AdversarialDefenseSuiteModal
+        isOpen={showDefenseSuiteModal}
+        onClose={() => setShowDefenseSuiteModal(false)}
         activeDraftTitle={activeDraft?.title}
         activeDraftContent={activeDraft?.content}
         onInjectContent={(html) => handleContentSave(activeDraft.content + html)}
+        onOpenInEditor={handleOpenDefenseDraft}
       />
+      </div>
     </div>
   );
 }

@@ -224,7 +224,7 @@ export const EraTransitionExplorer: React.FC = () => {
 
         {/* View Switcher Tabs (Segmented Glass Pill) */}
         <div
-          className="p-1 rounded-xl border flex items-center gap-1 self-start md:self-auto overflow-x-auto scrollbar-none"
+          className="p-1 rounded-xl border flex items-center gap-1 max-w-full w-full sm:w-auto overflow-x-auto scrollbar-none flex-nowrap shrink-0"
           style={{ background: "var(--surface)", borderColor: "var(--hairline)" }}
         >
           {/* Tab 1: Concordance */}

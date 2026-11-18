@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
-import { Bookmark, Loader2, Scale } from "lucide-react";
+import { Bookmark, Loader2 } from "lucide-react";
 import type { SearchResultItem } from "@/types/search";
-import { VerdictAnatomyModal } from "@/components/case/VerdictAnatomyModal";
 
 interface SearchResultCardProps {
   item: SearchResultItem;
@@ -39,7 +38,6 @@ export function SearchResultCard({
   searchQuery,
   onCiteAtCursor,
 }: SearchResultCardProps) {
-  const [showAnatomyModal, setShowAnatomyModal] = useState<boolean>(false);
   const hasStatus = isValidStatus(item.case_status, item.case_status_label);
   const stampClass = getStampClass(item.case_status);
   const displayStatus = item.case_status_label || item.case_status;
@@ -65,37 +63,27 @@ export function SearchResultCard({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-        {/* Verdict Anatomy Button (Pillar 3) */}
-        <button
-          onClick={() => setShowAnatomyModal(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer"
-          style={{
-            background: "var(--surface-container)",
-            borderColor: "var(--hairline)",
-            color: "var(--ink)",
-          }}
-          title="Inspect 4-Part Verdict Anatomy (Ratio, Issues, Facts, Obiter)"
-        >
-          <Scale size={13} style={{ color: "var(--brass)" }} />
-          <span className="hidden sm:inline">Verdict Anatomy</span>
-        </button>
-
         {/* Bookmark button */}
         {onBookmarkToggle && (
           <button
-            onClick={() => onBookmarkToggle(item.cnr, item.case_title)}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onBookmarkToggle(item.cnr, item.case_title);
+            }}
             disabled={isToggling}
             style={{
               background: "transparent",
               border: "none",
-              cursor: "pointer",
+              cursor: isToggling ? "wait" : "pointer",
               color: isBookmarked ? "var(--brass)" : "var(--ink-faint)",
               padding: "4px",
               display: "flex",
               alignItems: "center",
               borderRadius: "var(--radius-sm)",
-              opacity: isToggling ? 0.5 : 1,
-              transition: "color 140ms ease",
+              opacity: isToggling ? 0.6 : 1,
+              transition: "color 140ms ease, opacity 140ms ease",
             }}
             title={isBookmarked ? "Remove Bookmark" : "Save Case"}
             aria-label={isBookmarked ? "Remove Bookmark" : "Save Case"}
@@ -115,18 +103,6 @@ export function SearchResultCard({
           </div>
         )}
       </div>
-
-      {/* ── Structured 4-Part Verdict Anatomy Modal (Pillar 3) ── */}
-      <VerdictAnatomyModal
-        isOpen={showAnatomyModal}
-        onClose={() => setShowAnatomyModal(false)}
-        cnr={item.cnr}
-        caseTitle={item.case_title}
-        courtName={item.court_name || undefined}
-        searchQuery={searchQuery}
-        rawText={item.ai_keywords?.join(", ")}
-        onCiteAtCursor={onCiteAtCursor}
-      />
     </div>
   );
 }

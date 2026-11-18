@@ -43,9 +43,180 @@ class VerdictAnatomyService:
     def __init__(self) -> None:
         self.orchestrator = AIOrchestrator()
 
-    async def get_verdict_anatomy(self, req: VerdictAnatomyRequest) -> VerdictAnatomyResponse:
-        """Extracts the 4-part anatomy of a judgment from text or Kanoon doc ID."""
-        logger.info("extracting_verdict_anatomy", title=req.case_title, tid=req.tid)
+    @staticmethod
+    def _build_from_cached_order_ai(
+        ai_data: dict,
+        req: VerdictAnatomyRequest,
+    ) -> VerdictAnatomyResponse | None:
+        """Synthesize 4-part VerdictAnatomyResponse directly from cached OrderService 60-field AI JSON (zero LLM cost)."""
+        if not isinstance(ai_data, dict):
+            return None
+        conf = float(ai_data.get("extractionConfidence") or ai_data.get("extraction_confidence") or 0.0)
+        ratio_text = (
+            ai_data.get("ratio_decidendi")
+            or ai_data.get("ratioDecidendi")
+            or ai_data.get("core_holding")
+            or ai_data.get("caseSummary")
+            or ai_data.get("case_summary")
+        )
+        if conf <= 0.0 and not ratio_text:
+            return None
+
+        title = ai_data.get("caseTitle") or ai_data.get("case_title") or req.case_title or "Court Judgment"
+        court = ai_data.get("courtName") or ai_data.get("court_name") or req.court_name or "Court Record"
+        citation = ai_data.get("citation") or ai_data.get("official_citation") or f"Indian Kanoon Record #{req.tid or req.cnr or 'Auth'}"
+        decision_date = ai_data.get("orderDate") or ai_data.get("order_date") or ai_data.get("decision_date")
+
+        raw_judges = ai_data.get("judges") or ai_data.get("bench") or []
+        bench_coram = [str(j) for j in raw_judges] if isinstance(raw_judges, list) else ([str(raw_judges)] if raw_judges else [])
+
+        # 1. Issues Framed
+        raw_issues = ai_data.get("legal_issues") or ai_data.get("legalIssues") or ai_data.get("issues_framed") or []
+        issues: List[IssueFramedItem] = []
+        if isinstance(raw_issues, list):
+            for idx, item in enumerate(raw_issues[:6], start=1):
+                if isinstance(item, dict):
+                    q = str(item.get("issue") or item.get("question") or item.get("question_of_law") or "").strip()
+                    finding = str(item.get("holding") or item.get("answer") or item.get("court_finding") or item.get("finding") or "Adjudicated on merits.").strip()
+                    raw_fav = str(item.get("answered_in_favour_of") or item.get("favors") or "Neutral")
+                    if any(x in raw_fav.lower() for x in ["petitioner", "appellant", "accused", "applicant"]):
+                        fav = "Petitioner"
+                    elif any(x in raw_fav.lower() for x in ["respondent", "state", "prosecution", "defendant"]):
+                        fav = "Respondent"
+                    else:
+                        fav = "Neutral"
+                    if q:
+                        issues.append(IssueFramedItem(issue_number=idx, question_of_law=q, court_finding=finding, answered_in_favour_of=fav))
+                elif isinstance(item, str) and item.strip():
+                    issues.append(IssueFramedItem(issue_number=idx, question_of_law=item.strip(), court_finding="Determined by the Hon'ble Bench.", answered_in_favour_of="Neutral"))
+
+        if not issues:
+            issues.append(IssueFramedItem(
+                issue_number=1,
+                question_of_law=f"Core legal determination and statutory applicability in {title}.",
+                court_finding=str(ai_data.get("operative_disposition") or ai_data.get("outcome") or "Decided on merits."),
+                answered_in_favour_of="Neutral",
+            ))
+
+        # 2. Material Facts & Procedural Journey
+        raw_facts = ai_data.get("material_facts") or ai_data.get("keyFacts") or ai_data.get("key_facts") or []
+        material_facts = [str(f).strip() for f in raw_facts if str(f).strip()] if isinstance(raw_facts, list) else []
+        if not material_facts and ai_data.get("caseSummary"):
+            material_facts = [str(ai_data.get("caseSummary")).strip()]
+
+        proc_hist = ai_data.get("procedural_history") or ai_data.get("proceduralHistory") or []
+        if isinstance(proc_hist, list) and proc_hist:
+            stages = []
+            for p in proc_hist[:4]:
+                if isinstance(p, dict):
+                    stage = p.get("stage") or p.get("court") or p.get("event") or ""
+                    if stage:
+                        stages.append(str(stage))
+                elif isinstance(p, str):
+                    stages.append(p)
+            procedural_journey = " -> ".join(stages) if stages else "Proceedings adjudicated before the Hon'ble Court."
+        else:
+            procedural_journey = str(proc_hist) if isinstance(proc_hist, str) and proc_hist.strip() else "Proceedings adjudicated before the Hon'ble Court."
+
+        # 3. Binding Ratio Decidendi
+        held_points = ai_data.get("held_points") or ai_data.get("heldPoints") or []
+        binding_prop = ""
+        if isinstance(held_points, list) and held_points:
+            first_hp = held_points[0]
+            binding_prop = str(first_hp.get("holding") or first_hp.get("point") or first_hp) if isinstance(first_hp, dict) else str(first_hp)
+        core_rule = str(ratio_text or binding_prop or "Operative legal rule established by the bench.").strip()
+
+        is_sc = "supreme court" in court.lower()
+        precedential_weight = "Binding Supreme Court Precedent" if is_sc else "Binding High Court Precedent"
+
+        ratio = RatioDecidendiItem(
+            core_rule_of_law=core_rule,
+            binding_proposition=binding_prop or core_rule,
+            governing_paragraphs=["Operative Order / Ratio"],
+            bench_strength=f"{len(bench_coram)}-Judge Bench" if len(bench_coram) > 1 else "Hon'ble Bench",
+            precedential_weight=precedential_weight,
+        )
+
+        # 4. Obiter Dicta & Statutes
+        raw_obiter = ai_data.get("obiter_dicta") or ai_data.get("obiterDicta") or ai_data.get("judicial_observations") or []
+        obiter_list: List[ObiterDictaItem] = []
+        if isinstance(raw_obiter, list):
+            for ob in raw_obiter[:5]:
+                if isinstance(ob, dict):
+                    obiter_list.append(ObiterDictaItem(
+                        observation=str(ob.get("observation") or ob.get("text") or ""),
+                        context=str(ob.get("context") or "Judicial Observation"),
+                        nature=str(ob.get("nature") or "General Observation"),
+                    ))
+                elif isinstance(ob, str) and ob.strip():
+                    obiter_list.append(ObiterDictaItem(observation=ob.strip(), context="Court Remark", nature="General Observation"))
+
+        raw_statutes = ai_data.get("statutes_cited") or ai_data.get("statutesCited") or ai_data.get("sections_applied") or []
+        statutes: List[StatuteInterpretedItem] = []
+        if isinstance(raw_statutes, list):
+            for st in raw_statutes[:8]:
+                if isinstance(st, dict):
+                    statutes.append(StatuteInterpretedItem(
+                        act_name=str(st.get("act") or st.get("act_name") or "Statute"),
+                        section_article=str(st.get("section") or st.get("section_article") or "Applicable Provision"),
+                        nature_of_interpretation="General Interpretation",
+                        interpretation_summary=str(st.get("relevance") or st.get("summary") or "Applied in adjudicating core issues."),
+                    ))
+                elif isinstance(st, str) and st.strip():
+                    statutes.append(StatuteInterpretedItem(
+                        act_name=st.strip(),
+                        section_article="Cited Provision",
+                        nature_of_interpretation="General Interpretation",
+                        interpretation_summary="Relied upon in the court's reasoning.",
+                    ))
+
+        strategic_relevance = None
+        if req.search_query:
+            strategic_relevance = StrategicRelevanceItem(
+                why_this_helps=f"Directly addresses statutory and procedural principles pertinent to '{req.search_query}'.",
+                relevance_category="Direct Precedent",
+                strategic_utility="Cite this binding ratio from Order Intelligence to strengthen pleadings.",
+                key_anchor_section=statutes[0].section_article if statutes else None,
+            )
+
+        return VerdictAnatomyResponse(
+            case_title=title,
+            official_citation=citation,
+            kanoon_tid=req.tid,
+            kanoon_url=f"https://indiankanoon.org/doc/{req.tid}/" if req.tid else None,
+            court_name=court,
+            decision_date=decision_date,
+            bench_coram=bench_coram or ["Hon'ble Bench"],
+            disposition=str(ai_data.get("disposition") or ai_data.get("outcome") or ai_data.get("orderNature") or "Order rendered on merits."),
+            strategic_relevance=strategic_relevance,
+            issues_framed=issues,
+            material_facts=material_facts,
+            procedural_journey=procedural_journey,
+            ratio_decidendi=ratio,
+            obiter_dicta=obiter_list,
+            statutes_interpreted=statutes,
+            one_line_takeaway=str(ai_data.get("plainLanguageSummary") or ai_data.get("plain_language_summary") or core_rule)[:260],
+        )
+
+    async def get_verdict_anatomy(self, req: VerdictAnatomyRequest, db=None) -> VerdictAnatomyResponse:
+        """Extracts the 4-part anatomy of a judgment from cached OrderIntelligence, text, or Kanoon doc ID."""
+        logger.info("extracting_verdict_anatomy", title=req.case_title, tid=req.tid, cnr=req.cnr)
+
+        # Zero-cost cache reuse: derive 4-part anatomy from cached OrderService 60-field extraction if available
+        lookup_cnr = req.cnr or (str(req.tid) if req.tid else None)
+        if db is not None and lookup_cnr and not (req.raw_text and req.raw_text.strip()):
+            try:
+                from app.repositories.cache_repository import CacheRepository
+                cache_repo = CacheRepository(db)
+                cached_ai = await cache_repo.get_latest_cached_ai_for_cnr(lookup_cnr)
+                if cached_ai and cached_ai.ai_json:
+                    ai_data = json.loads(cached_ai.ai_json)
+                    reused = self._build_from_cached_order_ai(ai_data, req)
+                    if reused is not None:
+                        logger.info("verdict_anatomy_reused_order_ai_cache", cnr=lookup_cnr)
+                        return reused
+            except Exception as cache_err:
+                logger.warning("verdict_anatomy_cache_reuse_skipped", error=str(cache_err))
 
         text = req.raw_text or ""
         kanoon_url = None

@@ -186,7 +186,7 @@ export default function DashboardPage() {
         <div className="section-heading">
           <h3>Bookmarked cases</h3>
           {bookmarks.length > 0 && (
-            <Link to="/bookmarks" className="section-link">
+            <Link to="/vault?tab=bookmarks" className="section-link">
               View all ({bookmarks.length}) →
             </Link>
           )}

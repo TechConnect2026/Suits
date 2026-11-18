@@ -19,12 +19,13 @@ import {
   Sparkles,
   ArrowRight,
   ShieldAlert,
+  RotateCw,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { documentService } from "@/services/document";
 import { DocumentReaderModal } from "@/components/case/DocumentReaderModal";
-import { CounterPleadingModal } from "@/components/defense/CounterPleadingModal";
+import { AdversarialDefenseSuiteModal } from "@/components/defense/AdversarialDefenseSuiteModal";
 import type { UserDocument, DocumentTag, DocumentFilters, DocumentStats } from "@/types/document";
 import { DOCUMENT_TAG_LABELS, DOCUMENT_STATUS_LABELS } from "@/types/document";
 
@@ -234,8 +235,13 @@ function UploadModal({ onClose, onSuccess }: UploadModalProps) {
   );
 }
 
+interface FilesPageProps {
+  embedded?: boolean;
+  onCountChange?: (count: number) => void;
+}
+
 // ─────────────────────────────────────────────────── Main Page ──
-export default function FilesPage() {
+export default function FilesPage({ embedded = false, onCountChange }: FilesPageProps = {}) {
   const navigate = useNavigate();
   const [documents, setDocuments] = useState<UserDocument[]>([]);
   const [stats, setStats] = useState<DocumentStats | null>(null);
@@ -268,7 +274,14 @@ export default function FilesPage() {
     navigate("/document");
   };
 
+  const pollCountRef = useRef(0);
+
   const loadData = useCallback(async () => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     try {
       const [docs, st] = await Promise.all([
         documentService.list(filters),
@@ -276,7 +289,11 @@ export default function FilesPage() {
       ]);
       setDocuments(docs);
       setStats(st);
-    } catch {
+    } catch (err: any) {
+      if (err?.response?.status === 401) {
+        pollCountRef.current = 999;
+        return;
+      }
       toast.error("Failed to load documents.");
     } finally {
       setLoading(false);
@@ -287,11 +304,37 @@ export default function FilesPage() {
     loadData();
   }, [loadData]);
 
-  // Polling for processing documents
   useEffect(() => {
+    onCountChange?.(documents.length);
+  }, [documents.length, onCountChange]);
+
+  // Polling for processing documents with backoff and timeout
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) return;
+
     const hasProcessing = documents.some((d) => d.status === "pending" || d.status === "processing");
-    if (!hasProcessing) return;
-    const interval = setInterval(loadData, 4000);
+    if (!hasProcessing) {
+      pollCountRef.current = 0;
+      return;
+    }
+
+    // Stop polling after 20 cycles (~2.5 minutes) to avoid infinite polling on stuck docs
+    if (pollCountRef.current >= 20) {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      pollCountRef.current += 1;
+      try {
+        await loadData();
+      } catch (err: any) {
+        if (err?.response?.status === 401) {
+          clearInterval(interval);
+        }
+      }
+    }, 8000);
+
     return () => clearInterval(interval);
   }, [documents, loadData]);
 
@@ -320,6 +363,22 @@ export default function FilesPage() {
     setReaderInitialMode(mode);
   };
 
+  const handleReprocess = async (docId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await documentService.reprocess(docId);
+      toast.success("OCR & Extraction restarted.");
+      loadData();
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        toast.info("Document is actively being processed.");
+        loadData();
+      } else {
+        toast.error(err.response?.data?.message || err.response?.data?.detail || "Failed to restart extraction.");
+      }
+    }
+  };
+
   const handleDelete = async (docId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("Are you sure you want to delete this document?")) return;
@@ -333,20 +392,26 @@ export default function FilesPage() {
   };
 
   return (
-    <div className="dashboard-layout" style={{ maxWidth: "1150px", margin: "0 auto", padding: "28px 24px 60px" }}>
-      {/* Page Header */}
-      <div className="flex items-start justify-between mb-7 gap-4 flex-wrap">
-        <div>
-          <h1
-            className="text-2xl font-semibold"
-            style={{ color: "var(--ink)", fontFamily: "var(--font-display)", margin: 0, lineHeight: 1.2 }}
-          >
-            Evidence & Document Vault
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--ink-faint)" }}>
-            Upload private legal documents. SUITS automatically performs OCR, structured legal analysis, and full-text research indexing.
+    <div className={embedded ? "w-full max-w-full pb-12" : "dashboard-layout max-w-[1150px] mx-auto p-3 sm:p-6 pb-16"}>
+      {/* Page Header / Action Bar */}
+      <div className={`flex items-start justify-between gap-4 flex-wrap ${embedded ? "mb-4" : "mb-5 sm:mb-7"}`}>
+        {!embedded ? (
+          <div>
+            <h1
+              className="text-xl sm:text-2xl font-semibold"
+              style={{ color: "var(--ink)", fontFamily: "var(--font-display)", margin: 0, lineHeight: 1.2 }}
+            >
+              Evidence & Document Vault
+            </h1>
+            <p className="text-sm mt-1" style={{ color: "var(--ink-faint)" }}>
+              Upload private legal documents. SUIT automatically performs OCR, structured legal analysis, and full-text research indexing.
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs self-center" style={{ color: "var(--ink-faint)" }}>
+            Upload private pleadings, FIRs, or contracts for automatic Multimodal Gemini OCR &amp; semantic vector indexing.
           </p>
-        </div>
+        )}
         <button
           onClick={() => setShowUpload(true)}
           className="btn btn-primary flex items-center gap-2 shadow-sm"
@@ -359,7 +424,7 @@ export default function FilesPage() {
 
       {/* Stats Row */}
       {stats && (
-        <div className="grid grid-cols-3 gap-4 mb-7">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5 sm:mb-7">
           {[
             { label: "Total Documents", value: stats.total_documents },
             { label: "AI Analyzed & Ready", value: stats.indexed_documents },
@@ -506,6 +571,19 @@ export default function FilesPage() {
 
               {/* Right Column: Actions */}
               <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                {(doc.status === "failed" || doc.status === "pending") && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleReprocess(doc.id, e)}
+                    className="btn btn-ghost flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border hover:bg-amber-500/10 cursor-pointer"
+                    style={{ borderColor: "rgba(245, 158, 11, 0.4)", color: "#f59e0b" }}
+                    title="Retry OCR & Text Extraction"
+                  >
+                    <RotateCw size={13} />
+                    <span>Retry Extraction</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={(e) => {
@@ -579,11 +657,12 @@ export default function FilesPage() {
         />
       )}
 
-      {/* Counter-Pleading / Written Statement Modal */}
+      {/* Unified Adversarial Defense Suite Modal */}
       {defenseDocId && (
-        <CounterPleadingModal
+        <AdversarialDefenseSuiteModal
           isOpen={!!defenseDocId}
           preselectedDocId={defenseDocId}
+          initialTab="written_statement"
           onClose={() => setDefenseDocId(null)}
           onOpenInEditor={handleOpenDefenseDraftInEditor}
         />

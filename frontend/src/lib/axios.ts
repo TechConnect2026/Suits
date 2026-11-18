@@ -9,6 +9,7 @@ const api = axios.create({
 });
 
 import { useAIModeStore } from "@/store/ai-mode-store";
+import { useAuthStore } from "@/store/auth-store";
 
 // Request interceptor to attach access token and AI provider header
 api.interceptors.request.use(
@@ -16,6 +17,15 @@ api.interceptors.request.use(
     const token = localStorage.getItem("access_token");
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // When sending FormData, delete default Content-Type so Axios & browser generate multipart/form-data with proper boundary
+    if (config.data instanceof FormData && config.headers) {
+      if (typeof config.headers.delete === "function") {
+        config.headers.delete("Content-Type");
+      } else {
+        delete config.headers["Content-Type"];
+      }
     }
 
     // Attach active AI provider header
@@ -34,6 +44,24 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+// Refresh token mutex and queue to prevent concurrent race conditions
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token!);
+    }
+  });
+  failedQueue = [];
+};
 
 // Response interceptor to handle token refresh / 401s and AI rate limit fallbacks
 api.interceptors.response.use(
@@ -65,14 +93,41 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // If error is 401 and we haven't retried this request yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Skip refresh attempt on auth endpoints to prevent infinite recursion
+    const isAuthEndpoint =
+      originalRequest?.url?.includes("/auth/login") ||
+      originalRequest?.url?.includes("/auth/register") ||
+      originalRequest?.url?.includes("/auth/refresh");
+
+    // If error is 401 and not an auth endpoint
+    if (error.response?.status === 401 && !isAuthEndpoint && !originalRequest._retry) {
+      if (isRefreshing) {
+        // Queue this request until current token refresh completes
+        return new Promise((resolve, reject) => {
+          failedQueue.push({
+            resolve: (token: string) => {
+              if (originalRequest.headers) {
+                if (typeof originalRequest.headers.set === "function") {
+                  originalRequest.headers.set("Authorization", `Bearer ${token}`);
+                } else {
+                  originalRequest.headers["Authorization"] = `Bearer ${token}`;
+                }
+              }
+              resolve(api(originalRequest));
+            },
+            reject: (err: any) => {
+              reject(err);
+            },
+          });
+        });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
       const refreshToken = localStorage.getItem("refresh_token");
 
       if (refreshToken) {
         try {
-          // Attempt to refresh the token
           const res = await axios.post(
             `${import.meta.env.VITE_API_URL || "http://localhost:8000/api"}/auth/refresh`,
             { refresh_token: refreshToken }
@@ -86,22 +141,38 @@ api.interceptors.response.use(
             if (newRefreshToken) {
               localStorage.setItem("refresh_token", newRefreshToken);
             }
-            
-            // Retry the original request with the new token
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+            api.defaults.headers.common["Authorization"] = `Bearer ${newAccessToken}`;
+            if (originalRequest.headers) {
+              if (typeof originalRequest.headers.set === "function") {
+                originalRequest.headers.set("Authorization", `Bearer ${newAccessToken}`);
+              } else {
+                originalRequest.headers["Authorization"] = `Bearer ${newAccessToken}`;
+              }
+            }
+            processQueue(null, newAccessToken);
+            isRefreshing = false;
             return api(originalRequest);
           }
         } catch (refreshError) {
-          // If refresh fails, force logout
+          processQueue(refreshError, null);
+          isRefreshing = false;
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
-          // Optionally trigger a logout event or redirect to /login
+          useAuthStore.getState().logout();
           window.dispatchEvent(new Event("auth:logout"));
+          if (window.location.pathname !== "/login" && window.location.pathname !== "/") {
+            window.location.href = "/login";
+          }
+          return Promise.reject(refreshError);
         }
       } else {
-        // No refresh token, force logout
+        isRefreshing = false;
         localStorage.removeItem("access_token");
+        useAuthStore.getState().logout();
         window.dispatchEvent(new Event("auth:logout"));
+        if (window.location.pathname !== "/login" && window.location.pathname !== "/") {
+          window.location.href = "/login";
+        }
       }
     }
     

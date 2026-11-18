@@ -7,7 +7,12 @@ import { EmptyState } from "@/components/common/EmptyState";
 import type { Bookmark as BookmarkType } from "@/types/chat";
 import { toast } from "sonner";
 
-export default function BookmarksPage() {
+interface BookmarksPageProps {
+  embedded?: boolean;
+  onCountChange?: (count: number) => void;
+}
+
+export default function BookmarksPage({ embedded = false, onCountChange }: BookmarksPageProps = {}) {
   const [bookmarks, setBookmarks] = useState<BookmarkType[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,7 +20,9 @@ export default function BookmarksPage() {
     setLoading(true);
     try {
       const data = await bookmarkService.list();
-      setBookmarks(data);
+      const list = Array.isArray(data) ? data : [];
+      setBookmarks(list);
+      onCountChange?.(list.length);
     } catch {
       toast.error("Failed to load bookmarks.");
     } finally {
@@ -30,7 +37,11 @@ export default function BookmarksPage() {
   const handleRemove = async (cnr: string) => {
     try {
       await bookmarkService.remove(cnr);
-      setBookmarks((prev) => prev.filter((b) => b.cnr !== cnr));
+      setBookmarks((prev) => {
+        const next = prev.filter((b) => b.cnr !== cnr);
+        onCountChange?.(next.length);
+        return next;
+      });
       toast.info("Bookmark removed.");
     } catch {
       toast.error("Failed to remove bookmark.");
@@ -38,16 +49,17 @@ export default function BookmarksPage() {
   };
 
   return (
-    <div className="dashboard-layout" style={{ maxWidth: "100%", width: "100%", marginTop: 36 }}>
-      {/* Centered Heading with generous top gap */}
-      <div className="text-center mb-8">
-        <h1
-          className="text-2xl font-medium"
-          style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
-        >
-          Bookmarked Cases
-        </h1>
-      </div>
+    <div className={embedded ? "w-full max-w-full" : "dashboard-layout mt-4 sm:mt-9 w-full max-w-full"}>
+      {!embedded && (
+        <div className="text-center mb-6 sm:mb-8">
+          <h1
+            className="text-2xl font-medium"
+            style={{ color: "var(--ink)", fontFamily: "var(--font-display)" }}
+          >
+            Bookmarked Cases
+          </h1>
+        </div>
+      )}
 
       {loading ? (
         <SkeletonLoader count={4} height="76px" />
@@ -58,15 +70,15 @@ export default function BookmarksPage() {
           icon={<Bookmark size={32} />}
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 min-w-0">
           {bookmarks.map((b) => (
             <div
               key={b.id}
-              className="card-float group p-6 flex flex-col justify-between gap-5 transition-all"
+              className="card-float group p-4 sm:p-6 flex flex-col justify-between gap-4 sm:gap-5 transition-all min-w-0 max-w-full overflow-hidden"
               style={{ borderRadius: "var(--radius-md)" }}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3.5 min-w-0">
+              <div className="flex items-start justify-between gap-4 min-w-0">
+                <div className="flex items-start gap-3.5 min-w-0 flex-1">
                   <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
                     style={{
@@ -77,24 +89,24 @@ export default function BookmarksPage() {
                   >
                     <Scale size={18} />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <Link
                       to={`/case/${b.cnr}`}
-                      className="text-base font-medium hover:underline line-clamp-2 block"
+                      className="text-base font-medium hover:underline line-clamp-2 block break-words"
                       style={{ color: "var(--ink)" }}
                     >
                       {b.title}
                     </Link>
                     <div
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[11px] mt-2"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[11px] mt-2 break-all max-w-full"
                       style={{
                         background: "var(--surface-container)",
                         color: "var(--ink-faint)",
                         border: "1px solid var(--hairline)",
                       }}
                     >
-                      <Hash size={11} />
-                      <span>CNR: {b.cnr}</span>
+                      <Hash size={11} className="flex-shrink-0" />
+                      <span className="truncate">CNR: {b.cnr}</span>
                     </div>
                   </div>
                 </div>

@@ -18,7 +18,7 @@ export function JudgeCard({ judges, courtName }: JudgeCardProps) {
 
   return (
     <>
-      <div className="card-float p-6 sm:p-8 space-y-6 h-full flex flex-col">
+      <div className="card-float p-4 sm:p-8 space-y-6 h-full flex flex-col min-w-0 max-w-full overflow-hidden">
         <div className="flex items-center justify-between">
           <h3
             className="text-lg font-semibold tracking-tight flex items-center gap-2"

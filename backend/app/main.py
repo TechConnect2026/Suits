@@ -71,7 +71,6 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup
-    await ecourts_client.close()
     await kanoon_client.close()
     await cache_service.close()
     logger.info("suits_stopped")
@@ -93,13 +92,12 @@ from app.clients.ollama_client import ollama_client
 
 cors_kwargs = {
     "allow_origins": settings.cors_origins_list,
+    "allow_origin_regex": r"^(https?://(?:localhost|127\.0\.0\.1)(?::\d+)?|https://.*\.vercel\.app|https://.*\.duckdns\.org)$",
     "allow_credentials": True,
     "allow_methods": ["*"],
     "allow_headers": ["*"],
     "expose_headers": ["Content-Disposition", "X-AI-Provider"],
 }
-if settings.environment == "development":
-    cors_kwargs["allow_origin_regex"] = r"^https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$"
 
 app.add_middleware(CORSMiddleware, **cors_kwargs)
 

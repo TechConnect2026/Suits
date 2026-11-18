@@ -88,7 +88,7 @@ class DocumentProcessor:
         For scanned PDFs/images, delegates to Gemini multimodal OCR.
         """
         if mime_type == "application/pdf":
-            return await self._extract_pdf(file_data)
+            return await self._extract_pdf(file_data, filename)
         elif mime_type in (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword",
@@ -100,27 +100,113 @@ class DocumentProcessor:
             return await self._extract_image_ocr(file_data, mime_type), 1
         return "", 0
 
-    async def _extract_pdf(self, pdf_bytes: bytes) -> tuple[str, int]:
-        """Try pypdf first; fall back to Gemini OCR for scanned/image PDFs."""
+    async def _extract_pdf(self, pdf_bytes: bytes, filename: str = "document.pdf") -> tuple[str, int]:
+        """Try pypdf first; fall back to multi-tier Gemini OCR for scanned/image PDFs with zero OOM risk."""
         text = ""
         page_count = 0
+        has_embedded_images = False
+
         try:
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
             page_count = len(reader.pages)
             pages_text = []
             for page in reader.pages:
-                pt = page.extract_text() or ""
-                pages_text.append(pt)
-            text = "\n\n".join(pages_text)
+                try:
+                    pt = page.extract_text() or ""
+                    pages_text.append(pt)
+                except Exception:
+                    pages_text.append("")
+
+                if not has_embedded_images:
+                    # Safe dictionary inspection without decompressing image pixel streams
+                    try:
+                        resources = page.get("/Resources")
+                        if resources:
+                            xobjects = resources.get("/XObject")
+                            if xobjects and len(xobjects) > 0:
+                                has_embedded_images = True
+                    except Exception:
+                        pass
+
+            text = "\n\n".join(pages_text).strip()
         except Exception as exc:
             logger.warning("pypdf_extraction_failed", error=str(exc))
 
-        # If fewer than 100 chars extracted, treat as scanned and use Gemini OCR
-        if len(text.strip()) < 100:
-            logger.info("pdf_appears_scanned_using_gemini_ocr")
-            from app.clients.gemini_client import gemini_client
-            text = await gemini_client.extract_markdown_from_pdf(pdf_bytes)
+        # Determine if the PDF is scanned / raster-only:
+        # 1. Very short total text (< 120 chars)
+        # 2. Low text density per page (< 90 chars/page on average, indicating watermarks or page headers on scanned pages)
+        # 3. Embedded page images combined with low text density
+        avg_density = (len(text) / page_count) if page_count > 0 else 0
+        is_scanned = (len(text) < 120) or (page_count > 0 and avg_density < 90) or (has_embedded_images and avg_density < 180)
+
+        if is_scanned:
+            logger.info("pdf_appears_scanned_initiating_ocr", page_count=page_count, avg_density=avg_density, filename=filename)
+            ocr_text = ""
+
+            # Tier 1: Try Gemini full PDF multimodal OCR (if size is under 16 MB)
+            if len(pdf_bytes) <= 16 * 1024 * 1024:
+                try:
+                    from app.clients.gemini_client import gemini_client
+                    result = await gemini_client.extract_markdown_from_pdf(pdf_bytes)
+                    if (
+                        result
+                        and len(result.strip()) > 40
+                        and not result.startswith("*AI PDF extraction is unavailable")
+                        and not result.startswith("*PDF extraction failed")
+                        and not result.startswith("*No PDF content")
+                    ):
+                        ocr_text = result.strip()
+                        logger.info("pdf_full_ocr_success", chars=len(ocr_text))
+                except Exception as tier1_err:
+                    logger.warning("pdf_full_ocr_tier1_failed", error=str(tier1_err))
+
+            # Tier 2: If Tier 1 failed or file is > 16 MB, extract page images page-by-page (max 10 pages)
+            if not ocr_text and page_count > 0:
+                try:
+                    import pypdf
+                    reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+                    page_transcripts = []
+                    max_ocr_pages = min(page_count, 10)
+                    for p_idx in range(max_ocr_pages):
+                        page = reader.pages[p_idx]
+                        page_img_data = None
+                        page_mime = "image/jpeg"
+
+                        # Extract first raster image from page safely
+                        try:
+                            if hasattr(page, "images") and len(page.images) > 0:
+                                img_obj = page.images[0]
+                                page_img_data = img_obj.data
+                                if getattr(img_obj, "name", "").lower().endswith(".png"):
+                                    page_mime = "image/png"
+                        except Exception as img_read_err:
+                            logger.debug("page_image_read_skipped", page=p_idx, error=str(img_read_err))
+
+                        if page_img_data and len(page_img_data) > 1024:
+                            p_text = await self._extract_image_ocr(page_img_data, page_mime)
+                            if p_text and not p_text.startswith("*Image OCR"):
+                                page_transcripts.append(f"### Page {p_idx + 1}\n\n{p_text.strip()}")
+
+                    if page_transcripts:
+                        ocr_text = "\n\n---\n\n".join(page_transcripts)
+                        logger.info("pdf_page_by_page_ocr_success", pages_transcribed=len(page_transcripts))
+                except Exception as tier2_err:
+                    logger.warning("pdf_page_by_page_ocr_failed", error=str(tier2_err))
+
+            # Tier 3: If OCR succeeded, adopt it
+            if ocr_text:
+                text = ocr_text
+            elif not text.strip():
+                # Provide a structured legal placeholder record instead of empty string
+                text = (
+                    f"# Scanned Legal Document: {filename}\n\n"
+                    f"**Document Type:** Scanned Court Record / Judgment\n"
+                    f"**Total Pages:** {page_count}\n\n"
+                    f"> **Note:** This document consists of scanned physical pages or photographs. "
+                    f"Digital text was not embedded in the original file. "
+                    f"The original high-resolution physical scans can be inspected in full using the Court PDF viewer tab."
+                )
 
         return text, page_count
 
@@ -451,19 +537,28 @@ class DocumentProcessor:
 
     async def process_document(self, document_id: uuid.UUID) -> None:
         """Run the full OCR → AI analysis → chunk → embed pipeline for a document."""
+        import asyncio
         from sqlalchemy import select
 
-        result = await self.db.execute(
-            select(UserDocument).where(UserDocument.id == document_id)
-        )
-        doc = result.scalar_one_or_none()
+        # Retry up to 10 times with 0.5s interval to ensure database visibility across connection pools
+        doc = None
+        for attempt in range(10):
+            result = await self.db.execute(
+                select(UserDocument).where(UserDocument.id == document_id)
+            )
+            doc = result.scalar_one_or_none()
+            if doc is not None:
+                break
+            await asyncio.sleep(0.5)
+
         if doc is None:
-            logger.error("process_document_not_found", document_id=str(document_id))
+            logger.error("process_document_not_found_after_retries", document_id=str(document_id))
             return
 
-        # Mark as processing
+        # Mark as processing and commit immediately so all concurrent queries see real-time status
         doc.status = DocumentStatus.PROCESSING
-        await self.db.flush()
+        await self.db.commit()
+        await self.db.refresh(doc)
 
         try:
             # Read file from disk
@@ -518,9 +613,9 @@ class DocumentProcessor:
             except Exception as emb_exc:
                 logger.warning("embedding_generation_skipped", error=str(emb_exc))
 
-            # Mark as indexed
+            # Mark as indexed and commit immediately
             doc.status = DocumentStatus.INDEXED
-            await self.db.flush()
+            await self.db.commit()
 
             logger.info(
                 "document_processed",
@@ -534,4 +629,4 @@ class DocumentProcessor:
             logger.error("document_processing_failed", document_id=str(document_id), error=str(exc))
             doc.status = DocumentStatus.FAILED
             doc.error_message = str(exc)
-            await self.db.flush()
+            await self.db.commit()

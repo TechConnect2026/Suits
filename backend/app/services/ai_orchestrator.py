@@ -301,25 +301,12 @@ class AIOrchestrator:
             if result and result.strip() and not result.startswith("### AI Case Analysis Unavailable"):
                 return result
         except Exception as g_err:
-            logger.warning("orchestrator_gemini_text_failed_trying_groq", error=str(g_err))
+            g_err_str = str(g_err).lower()
+            logger.error("orchestrator_gemini_text_failed", error=str(g_err))
+            if "429" in g_err_str or "quota" in g_err_str or "rate limit" in g_err_str or "resource_exhausted" in g_err_str:
+                raise OnlineAILimitReachedError() from g_err
 
-        try:
-            from app.clients.groq_client import groq_client
-            groq_text = await groq_client.generate(
-                system_prompt=system_prompt,
-                user_prompt=prompt,
-                temperature=temperature if temperature is not None else 0.3,
-            )
-            if groq_text and groq_text.strip():
-                logger.info("orchestrator_groq_text_fallback_success")
-                return groq_text
-        except Exception as gr_err:
-            gr_err_str = str(gr_err).lower()
-            logger.error("orchestrator_groq_text_fallback_failed", error=str(gr_err))
-            if "429" in gr_err_str or "quota" in gr_err_str or "rate limit" in gr_err_str:
-                raise OnlineAILimitReachedError() from gr_err
-
-        raise OnlineAILimitReachedError("Online AI services (Gemini & Groq) unavailable or quota exhausted.")
+        raise OnlineAILimitReachedError("Online AI service (Gemini) unavailable or quota exhausted.")
 
     async def generate_with_context(
         self,

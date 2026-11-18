@@ -251,12 +251,15 @@ class OllamaClient:
 
         messages: list[dict[str, str]] = [{"role": "system", "content": sys_content}]
 
-        # Append last 10 messages from history
-        for msg in conversation_history[-10:]:
-            role = "assistant" if msg.get("role") == "assistant" else "user"
-            messages.append({"role": role, "content": msg.get("content", "")})
+        from app.prompts.system import TURN_LEVEL_DIRECTIVE
 
-        messages.append({"role": "user", "content": user_message})
+        # Append last 4 messages from history (context isolation)
+        for msg in conversation_history[-4:]:
+            role = "assistant" if msg.get("role") == "assistant" else "user"
+            messages.append({"role": role, "content": msg.get("content") or msg.get("message", "")})
+
+        anchored_user_message = f"{user_message}\n\n---\n{TURN_LEVEL_DIRECTIVE}"
+        messages.append({"role": "user", "content": anchored_user_message})
 
         try:
             response = await client.chat.completions.create(
@@ -297,11 +300,14 @@ class OllamaClient:
 
         messages: list[dict[str, str]] = [{"role": "system", "content": sys_content}]
 
-        for msg in conversation_history[-10:]:
-            role = "assistant" if msg.get("role") == "assistant" else "user"
-            messages.append({"role": role, "content": msg.get("content", "")})
+        from app.prompts.system import TURN_LEVEL_DIRECTIVE
 
-        messages.append({"role": "user", "content": user_message})
+        for msg in conversation_history[-4:]:
+            role = "assistant" if msg.get("role") == "assistant" else "user"
+            messages.append({"role": role, "content": msg.get("content") or msg.get("message", "")})
+
+        anchored_user_message = f"{user_message}\n\n---\n{TURN_LEVEL_DIRECTIVE}"
+        messages.append({"role": "user", "content": anchored_user_message})
 
         try:
             stream = await client.chat.completions.create(

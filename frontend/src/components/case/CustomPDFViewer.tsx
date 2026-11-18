@@ -412,7 +412,11 @@ export const CustomPDFViewer = forwardRef<CustomPDFViewerRef, CustomPDFViewerPro
     const [pdfDoc, setPdfDoc] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
     const [numPages, setNumPages] = useState<number>(0);
     const [currentPage, setCurrentPage] = useState<number>(1);
-    const [scale, setScale] = useState<number>(initialScale);
+    const isMobileViewport = typeof window !== "undefined" && window.innerWidth < 768;
+    const defaultMobileScale = isMobileViewport
+      ? Math.min(0.65, +(Math.max(0.42, (window.innerWidth - 32) / 595.28)).toFixed(2))
+      : initialScale;
+    const [scale, setScale] = useState<number>(defaultMobileScale);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
     // Increments whenever any page finishes rendering, forcing the loading
@@ -1094,8 +1098,14 @@ function getTextNodesInRange(range: Range): { node: Text; start: number; end: nu
     };
 
     const handleZoomIn = () => setScale((prev) => Math.min(2.5, +(prev + 0.15).toFixed(2)));
-    const handleZoomOut = () => setScale((prev) => Math.max(0.6, +(prev - 0.15).toFixed(2)));
-    const handleZoomReset = () => setScale(1.55); // Reset to 155%
+    const handleZoomOut = () => setScale((prev) => Math.max(0.4, +(prev - 0.15).toFixed(2)));
+    const handleZoomReset = () => {
+      const isMob = typeof window !== "undefined" && window.innerWidth < 768;
+      const resetScale = isMob
+        ? Math.min(0.65, +(Math.max(0.42, (window.innerWidth - 32) / 595.28)).toFixed(2))
+        : 1.55;
+      setScale(resetScale);
+    };
     const handleFitWidth = () => {
       if (!containerRef.current || !pdfDoc) return;
       pdfDoc.getPage(1).then((page) => {
@@ -1245,11 +1255,11 @@ function getTextNodesInRange(range: Range): { node: Text; start: number; end: nu
 
         {/* Sub-header / Reader Action Bar */}
         <div
-          className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0 text-xs select-none"
+          className="flex items-center justify-between px-3 sm:px-4 py-1.5 sm:py-2 border-b flex-shrink-0 text-xs select-none overflow-x-auto scrollbar-none flex-nowrap gap-2"
           style={{ background: "var(--surface)", borderColor: "var(--border)" }}
         >
           {/* Left: Page Preview Button + Page Navigation + Enlarged Research Button */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-nowrap shrink-0">
             {/* Page Preview Button */}
             <button
               onClick={handleToggleThumbnails}
@@ -1322,7 +1332,7 @@ function getTextNodesInRange(range: Range): { node: Text; start: number; end: nu
           </div>
 
           {/* Right: Zoom Controls */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
             <div
               className="flex items-center rounded-lg border p-0.5"
               style={{ borderColor: "var(--border)", background: "var(--surface-container)" }}

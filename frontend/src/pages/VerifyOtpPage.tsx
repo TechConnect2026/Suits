@@ -184,7 +184,7 @@ export default function VerifyOtpPage() {
               letterSpacing: "0.01em",
             }}
           >
-            Suits
+            SUIT
           </span>
           <span
             style={{

@@ -282,7 +282,7 @@ export function PrecedentsPredictionCard({
   return (
     <div
       id="precedents-prediction-section"
-      className="card-float overflow-hidden rounded-2xl transition-all relative border space-y-6 p-6 sm:p-8"
+      className="card-float overflow-hidden rounded-2xl transition-all relative border space-y-6 p-4 sm:p-8 min-w-0 max-w-full"
       style={{
         background: "var(--surface)",
         borderColor: "var(--hairline)",

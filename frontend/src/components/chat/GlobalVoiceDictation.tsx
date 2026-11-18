@@ -18,7 +18,6 @@ export function GlobalVoiceDictation() {
     addRecentCorrections,
   } = useDictationStore();
 
-  const isAltHoldingRef = useRef(false);
   const locationRef = useRef(location);
 
   useEffect(() => {
@@ -81,43 +80,39 @@ export function GlobalVoiceDictation() {
     setStoreInterimText(interimText);
   }, [interimText, setStoreInterimText]);
 
-  // Global Alt key Push-to-Talk listener across entire application
+  // Global Alt+Z toggle listener (Esc to cancel) across entire application
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Alt") {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key.toLowerCase() === "z" || e.code === "KeyZ")) {
         e.preventDefault();
-        if (e.repeat) return; // Prevent repeated triggers while held
+        if (e.repeat) return;
 
-        if (!isListening && isSupported) {
-          isAltHoldingRef.current = true;
+        if (!isSupported) return;
+        if (isListening) {
+          stopListening();
+        } else {
           startListening();
         }
+        return;
       }
-    };
 
-    const handleGlobalKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "Alt") {
-        if (isAltHoldingRef.current) {
-          isAltHoldingRef.current = false;
-          stopListening();
-        }
+      if (e.key === "Escape" && isListening) {
+        e.preventDefault();
+        cancelListening();
       }
     };
 
     const handleWindowBlur = () => {
-      if (isAltHoldingRef.current) {
-        isAltHoldingRef.current = false;
+      if (isListening) {
         cancelListening();
       }
     };
 
     window.addEventListener("keydown", handleGlobalKeyDown);
-    window.addEventListener("keyup", handleGlobalKeyUp);
     window.addEventListener("blur", handleWindowBlur);
 
     return () => {
       window.removeEventListener("keydown", handleGlobalKeyDown);
-      window.removeEventListener("keyup", handleGlobalKeyUp);
       window.removeEventListener("blur", handleWindowBlur);
     };
   }, [isListening, isSupported, startListening, stopListening, cancelListening]);

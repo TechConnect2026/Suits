@@ -19,6 +19,7 @@ from app.schemas.document import (
 )
 from app.schemas.order import OrderAIResponse
 from app.schemas.common import APIResponse
+from app.prompts.system import STANDARD_NON_LEGAL_REFUSAL, is_blatant_non_legal_query
 from app.services.document_processor import DocumentProcessor, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES
 
 logger = structlog.get_logger()
@@ -29,6 +30,9 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 async def _run_processing(document_id: uuid.UUID) -> None:
     """Run document processing in a background task with its own DB session."""
     from app.database.session import async_session_factory
+    from sqlalchemy import select
+    from app.models.user_document import UserDocument, DocumentStatus
+
     async with async_session_factory() as session:
         try:
             processor = DocumentProcessor(session)
@@ -37,6 +41,19 @@ async def _run_processing(document_id: uuid.UUID) -> None:
         except Exception as exc:
             await session.rollback()
             logger.error("background_processing_failed", document_id=str(document_id), error=str(exc))
+            # Mark document as FAILED in an isolated session so it never hangs in PROCESSING
+            try:
+                async with async_session_factory() as fail_session:
+                    res = await fail_session.execute(
+                        select(UserDocument).where(UserDocument.id == document_id)
+                    )
+                    failed_doc = res.scalar_one_or_none()
+                    if failed_doc:
+                        failed_doc.status = DocumentStatus.FAILED
+                        failed_doc.error_message = f"Processing error: {str(exc)[:300]}"
+                        await fail_session.commit()
+            except Exception as mark_err:
+                logger.warning("failed_to_mark_doc_status_failed", error=str(mark_err))
 
 
 @router.post("/upload", response_model=APIResponse[DocumentUploadResponse])
@@ -46,10 +63,18 @@ async def upload_document(
     db: DbSession,
     file: UploadFile = File(...),
     cnr: Optional[str] = Form(default=None),
-    tag: DocumentTag = Form(default=DocumentTag.OTHER),
+    tag: str = Form(default="other"),
 ):
     """Upload a legal document. Processing (OCR + embedding) happens asynchronously in background."""
     content_type = file.content_type or "application/octet-stream"
+
+    # Safely resolve tag to enum
+    try:
+        parsed_tag = DocumentTag(tag.lower().strip()) if tag else DocumentTag.OTHER
+    except ValueError:
+        parsed_tag = DocumentTag.OTHER
+
+    clean_cnr = cnr.strip() if cnr and cnr.strip() else None
 
     # Read file into memory for validation
     file_data = await file.read()
@@ -71,21 +96,24 @@ async def upload_document(
     # Create database record (status=PENDING)
     doc = UserDocument(
         user_id=user.id,
-        cnr=cnr or None,
+        cnr=clean_cnr,
         filename=file_path.name,
         original_filename=file.filename or "upload",
         file_path=str(file_path),
         file_size=file_size,
         mime_type=content_type,
-        tag=tag,
+        tag=parsed_tag,
         status=DocumentStatus.PENDING,
         content_hash=content_hash,
     )
     repo = DocumentRepository(db)
     doc = await repo.create(doc)
+    await db.commit()
+    await db.refresh(doc)
     document_id = doc.id
 
     background_tasks.add_task(_run_processing, document_id)
+    asyncio.create_task(_run_processing(document_id))
 
     logger.info("document_uploaded", document_id=str(document_id), filename=file.filename)
     return APIResponse(
@@ -116,6 +144,12 @@ async def list_documents(
         limit=limit,
         offset=offset,
     )
+    # Auto-resume any orphaned pending documents so they never hang
+    for d in docs:
+        if d.status == DocumentStatus.PENDING:
+            logger.info("auto_resuming_pending_document", document_id=str(d.id))
+            asyncio.create_task(_run_processing(d.id))
+
     return APIResponse(data=[DocumentListItem.model_validate(d) for d in docs])
 
 
@@ -227,6 +261,27 @@ async def chat_with_document(
         raise HTTPException(status_code=404, detail="Document not found.")
     if doc.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied.")
+
+    # Fast guard: immediately refuse blatant non-legal/off-topic requests
+    if is_blatant_non_legal_query(request.message):
+        async def refusal_generator():
+            chunk_size = 20
+            for i in range(0, len(STANDARD_NON_LEGAL_REFUSAL), chunk_size):
+                chunk = STANDARD_NON_LEGAL_REFUSAL[i:i + chunk_size]
+                payload = json.dumps({"token": chunk})
+                yield f"data: {payload}\n\n"
+                await asyncio.sleep(0.01)
+            yield f"data: {json.dumps({'done': True, 'sources': []})}\n\n"
+
+        return StreamingResponse(
+            refusal_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     doc_context = (
         f"--- USER UPLOADED LEGAL DOCUMENT: {doc.original_filename} ---\n"
@@ -379,14 +434,18 @@ async def reprocess_document(
     if doc.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied.")
     if doc.status == DocumentStatus.PROCESSING:
-        raise HTTPException(status_code=409, detail="Document is already being processed.")
+        return APIResponse(
+            data=DocumentUploadResponse.model_validate(doc),
+            message="Document is already actively being processed.",
+        )
 
     doc.status = DocumentStatus.PENDING
     doc.error_message = None
-    await db.flush()
+    await db.commit()
+    await db.refresh(doc)
 
-    from app.core.config import settings
     background_tasks.add_task(_run_processing, document_id)
+    asyncio.create_task(_run_processing(document_id))
     return APIResponse(
         data=DocumentUploadResponse.model_validate(doc),
         message="Reprocessing started.",

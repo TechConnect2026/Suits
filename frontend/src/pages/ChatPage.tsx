@@ -16,11 +16,13 @@ export default function ChatPage() {
   const [activeId, setActiveId] = useState<string | undefined>(urlConversationId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showMobileList, setShowMobileList] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const streamAbortRef = useRef<AbortController | null>(null);
   const lastProcessedPromptRef = useRef<string | null>(null);
   const conversationsRef = useRef<Conversation[]>([]);
+  const activelyStreamingConvoIdRef = useRef<string | null>(null);
 
   const { pendingFullScreenPrompt, setPendingFullScreenPrompt } = useDictationStore();
 
@@ -56,6 +58,10 @@ export default function ChatPage() {
   };
 
   const loadMessages = async (id: string) => {
+    // Prevent clobbering active message stream when creating and navigating to a new conversation
+    if (activelyStreamingConvoIdRef.current === id) {
+      return;
+    }
     try {
       const msgs = await chatService.getMessages(id);
       setMessages(msgs || []);
@@ -148,6 +154,7 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, userMsg]);
 
       const convoId = targetId;
+      activelyStreamingConvoIdRef.current = convoId;
       let accumulated = "";
       const controller = chatService.streamMessage(
         convoId,
@@ -157,6 +164,7 @@ export default function ChatPage() {
           setStreamingContent(accumulated);
         },
         (questions) => {
+          activelyStreamingConvoIdRef.current = null;
           const assistantMsg: ChatMessage = {
             id: `server-${Date.now()}`,
             role: "assistant",
@@ -169,6 +177,7 @@ export default function ChatPage() {
           setLoading(false);
         },
         async (err) => {
+          activelyStreamingConvoIdRef.current = null;
           if (err !== "AbortError") {
             // Self-healing: if targetId 404'd, create a fresh conversation and auto-retry
             if (err && err.includes("404")) {
@@ -269,6 +278,7 @@ export default function ChatPage() {
 
   const handleSelectConversation = (id: string) => {
     setActiveId(id);
+    setShowMobileList(false);
     navigate(`/chat/${id}`);
   };
 
@@ -282,14 +292,43 @@ export default function ChatPage() {
         boxShadow: "var(--shadow-card)",
       }}
     >
-      <ConversationSidebar
-        conversations={conversations}
-        activeId={activeId}
-        onSelect={handleSelectConversation}
-        onNew={handleNewChat}
-        onDelete={handleDeleteConversation}
-      />
-      <div className="flex-1 p-3 sm:p-4 overflow-hidden h-full flex flex-col">
+      {/* Conversation Sidebar: desktop always flex (w-72), mobile conditional full width */}
+      <div className={`${showMobileList ? "flex w-full" : "hidden"} md:flex md:w-72 h-full flex-shrink-0`}>
+        <ConversationSidebar
+          conversations={conversations}
+          activeId={activeId}
+          onSelect={handleSelectConversation}
+          onNew={() => {
+            setShowMobileList(false);
+            handleNewChat();
+          }}
+          onDelete={handleDeleteConversation}
+        />
+      </div>
+
+      {/* Main Chat Panel: on mobile hidden when browsing list, flex-1 otherwise */}
+      <div className={`${showMobileList ? "hidden" : "flex"} md:flex flex-1 p-2 sm:p-4 overflow-hidden h-full flex-col`}>
+        {/* Mobile toggle button to switch between chats list and active chat */}
+        <div className="flex md:hidden items-center justify-between pb-2 mb-2 border-b border-[var(--border)]">
+          <button
+            type="button"
+            onClick={() => setShowMobileList(true)}
+            className="text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface-container)] text-[var(--ink)] cursor-pointer"
+          >
+            <span>← Conversations ({conversations.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowMobileList(false);
+              handleNewChat();
+            }}
+            className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-[var(--brass)] text-white cursor-pointer"
+          >
+            + New
+          </button>
+        </div>
+
         <ChatPanel
           messages={messages}
           onSendMessage={handleSendMessage}

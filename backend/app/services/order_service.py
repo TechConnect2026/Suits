@@ -261,12 +261,12 @@ class OrderService:
         if cnr_url_match:
             return cnr_url_match.group(1)
 
-        # 2. Check if filename or CNR is explicitly a Kanoon doc ID (e.g. "doc_29724830", "doc-29724830", "193792759.pdf")
-        doc_match = _re.match(r'^(?:doc[_-])?(\d{4,12})(?:\.(?:pdf|html|txt))?$', filename_clean, _re.IGNORECASE)
+        # 2. Check if filename or CNR is explicitly a Kanoon doc ID (e.g. "doc_29724830", "interim-193792759.pdf", "193792759.pdf")
+        doc_match = _re.match(r'^(?:doc[_-]|interim[_-]|order[_-])?(\d{4,12})(?:\.(?:pdf|html|txt))?$', filename_clean, _re.IGNORECASE)
         if doc_match:
             return doc_match.group(1)
 
-        cnr_match = _re.match(r'^(?:doc[_-])?(\d{4,12})(?:\.(?:pdf|html|txt))?$', cnr_clean, _re.IGNORECASE)
+        cnr_match = _re.match(r'^(?:doc[_-]|interim[_-]|order[_-])?(\d{4,12})(?:\.(?:pdf|html|txt))?$', cnr_clean, _re.IGNORECASE)
         if cnr_match:
             return cnr_match.group(1)
 
@@ -317,22 +317,48 @@ class OrderService:
         """Get court document markdown from Indian Kanoon API with permanent caching."""
         redis_key = f"order_md:{cnr}:{filename}"
 
+        def _ensure_clean_md(raw_md: str) -> str:
+            if not raw_md:
+                return raw_md
+            try:
+                from app.utils.kanoon_formatter import clean_court_text_and_extract_signatures, reflow_legal_markdown
+                cleaned, sigs = clean_court_text_and_extract_signatures(raw_md)
+                reflowed = reflow_legal_markdown(cleaned)
+                if sigs:
+                    reflowed += "\n\n---\n\n### Verified Digital Record\n"
+                    for s in sigs:
+                        reflowed += f"- **Signatory:** {s['signer']}\n"
+                        if s.get("date"):
+                            reflowed += f"- **Date:** {s['date']}\n"
+                        reflowed += f"- **Status:** {s['status']}\n"
+                return reflowed
+            except Exception:
+                return raw_md
+
         # 1. Check Redis cache (only accept valid content)
         cached = await cache_service.get(redis_key)
         if cached and isinstance(cached, dict):
             cached_md = cached.get("markdown", "")
             if cached_md and not cached_md.startswith("*") and "could not be" not in cached_md.lower():
+                cleaned = _ensure_clean_md(cached_md)
+                if cleaned != cached_md:
+                    cached["markdown"] = cleaned
+                    await cache_service.set(redis_key, cached)
                 return OrderMarkdownResponse(**cached)
 
         # 2. Check PostgreSQL / SQLite permanent cache
-        cached_pg = await self.cache_repo.get_cached_order(cnr, filename)
-        if cached_pg and cached_pg.markdown:
-            cached_md = cached_pg.markdown
-            if not cached_md.startswith("*") and "could not be" not in cached_md.lower():
-                logger.info("ORDER_MARKDOWN_CACHE_HIT", cnr=cnr, filename=filename, source="db", size=len(cached_md))
-                response = OrderMarkdownResponse(cnr=cnr, filename=filename, markdown=cached_md)
-                await cache_service.set(redis_key, response.model_dump())
-                return response
+        try:
+            cached_pg = await self.cache_repo.get_cached_order(cnr, filename)
+            if cached_pg and cached_pg.markdown:
+                cached_md = cached_pg.markdown
+                if not cached_md.startswith("*") and "could not be" not in cached_md.lower():
+                    logger.info("ORDER_MARKDOWN_CACHE_HIT", cnr=cnr, filename=filename, source="db", size=len(cached_md))
+                    cleaned = _ensure_clean_md(cached_md)
+                    response = OrderMarkdownResponse(cnr=cnr, filename=filename, markdown=cleaned)
+                    await cache_service.set(redis_key, response.model_dump())
+                    return response
+        except Exception as db_err:
+            logger.debug("db_order_cache_skipped", error=str(db_err))
 
         # 3. Resolve Indian Kanoon TID and fetch document from Kanoon API
         tid = await self._resolve_kanoon_tid(cnr, filename)
@@ -532,7 +558,7 @@ class OrderService:
                         "statutory_provisions_considered": raw.get("statutoryProvisionsConsidered") or raw.get("statutory_provisions_considered", []),
                         "operative_disposition": raw.get("operativeDisposition") or raw.get("outcome") or raw.get("dispositionStatus") or "Disposed",
                     },
-                    "model_attribution": "Unified Case Intelligence · InLegalBERT & Local Ollama" if ai_orchestrator.is_local() else "Unified Case Intelligence · InLegalBERT & Gemini/Groq",
+                    "model_attribution": "Unified Case Intelligence · InLegalBERT & Local Ollama" if ai_orchestrator.is_local() else "Unified Case Intelligence · InLegalBERT & Gemini",
                     "order_hash": order_hash,
                     "is_cached": True,
                     "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -553,7 +579,7 @@ class OrderService:
         return response
 
     async def download_pdf(self, cnr: str, filename: str) -> bytes:
-        """Download original court copy from Kanoon (origdoc endpoint) with permanent disk caching."""
+        """Download original court copy from Kanoon (origdoc endpoint) or synthesize from judgment text, with permanent disk caching."""
         tid = await self._resolve_kanoon_tid(cnr, filename)
         if not tid:
             return b"Document not available: Could not resolve a valid Indian Kanoon document ID."
@@ -562,12 +588,13 @@ class OrderService:
         from pathlib import Path
         cache_dir = Path("./data/pdf_cache")
         cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_file = cache_dir / f"{tid}.pdf"
+        cache_file = cache_dir / f"{tid}_v5.pdf"
 
         if cache_file.exists() and cache_file.stat().st_size > 100:
             logger.info("order_pdf_served_from_disk_cache", tid=tid, cnr=cnr)
             return cache_file.read_bytes()
 
+        # 1. Try fetching the scanned physical PDF if available
         try:
             pdf_bytes = await kanoon_client.get_orig_doc_bytes(tid)
             if pdf_bytes and len(pdf_bytes) > 100 and pdf_bytes.startswith(b'%PDF-'):
@@ -577,13 +604,41 @@ class OrderService:
                 except Exception as cache_err:
                     logger.warning("order_pdf_cache_write_failed", error=str(cache_err))
                 return pdf_bytes
-            elif pdf_bytes:
-                return pdf_bytes
-
-            return b"Original court copy PDF could not be fetched from Indian Kanoon."
         except Exception as exc:
-            logger.error("order_download_failed", tid=tid, cnr=cnr, error=str(exc))
-            return str(exc).encode()
+            logger.warning("kanoon_origdoc_fetch_failed", tid=tid, cnr=cnr, error=str(exc))
+
+        # 2. Universal PDF Fallback: Synthesize an official formatted PDF from the Kanoon markdown judgment text
+        try:
+            markdown_res = await self.get_markdown(cnr, filename)
+            if markdown_res and markdown_res.markdown and len(markdown_res.markdown.strip()) > 50:
+                from app.utils.pdf_generator import synthesize_court_pdf
+                md_text = markdown_res.markdown
+                first_heading = ""
+                for line in md_text.split("\n"):
+                    stripped_line = line.strip()
+                    if stripped_line.startswith("## ") or stripped_line.startswith("### "):
+                        first_heading = re.sub(r"^#+\s*", "", stripped_line).strip()
+                        break
+                title = first_heading or f"Court Record - {cnr}"
+                court_name = "Supreme Court of India" if "SUPREME COURT" in md_text.upper() else "Court of Record"
+                synth_pdf = synthesize_court_pdf(
+                    content=md_text,
+                    title=title,
+                    court_name=court_name,
+                    order_date="",
+                    cnr=cnr,
+                )
+                if synth_pdf and len(synth_pdf) > 100 and synth_pdf.startswith(b'%PDF-'):
+                    try:
+                        cache_file.write_bytes(synth_pdf)
+                        logger.info("synthesized_order_pdf_saved_to_cache", tid=tid, cnr=cnr, size=len(synth_pdf))
+                    except Exception as cache_err:
+                        logger.warning("order_pdf_cache_write_failed", error=str(cache_err))
+                    return synth_pdf
+        except Exception as synth_err:
+            logger.warning("order_pdf_synthesis_failed", tid=tid, cnr=cnr, error=str(synth_err))
+
+        return b"Original court copy PDF could not be fetched or synthesized."
 
     @staticmethod
     def _transform_ai_response(cnr: str, filename: str, raw: dict[str, Any]) -> OrderAIResponse:

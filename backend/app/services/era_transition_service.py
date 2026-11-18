@@ -922,7 +922,7 @@ class EraTransitionService:
 
         cnr_clean = cnr.strip().upper()
 
-        # 1. Resolve case data from cache (already-fetched eCourts JSON)
+        # 1. Resolve case data from cache (already-fetched Kanoon JSON)
         from sqlalchemy import select
         case_row = (
             await self.db.execute(select(CachedCase).where(CachedCase.cnr == cnr_clean))

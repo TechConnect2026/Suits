@@ -1,0 +1,21 @@
+{$API_DOMAIN:http://:80} {
+    encode gzip zstd
+
+    # Route all API traffic to FastAPI backend
+    @api path /api /api/*
+    handle @api {
+        reverse_proxy backend:8000 {
+            flush_interval -1
+            header_up X-Real-IP {remote_host}
+            transport http {
+                dial_timeout 30s
+                response_header_timeout 300s
+            }
+        }
+    }
+
+    # Route all web app traffic, SPA routing, and static assets to Frontend Nginx
+    handle {
+        reverse_proxy frontend:80
+    }
+}

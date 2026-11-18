@@ -106,7 +106,7 @@ export default function RegisterPage() {
       return JSON.stringify(detail);
     }
     if (err.message === "Network Error") {
-      return "Unable to connect to SUITS API server. Please check your network connection.";
+      return "Unable to connect to SUIT API server. Please check your network connection.";
     }
     return err.message || "Registration failed. Please check your details and try again.";
   };
@@ -133,7 +133,7 @@ export default function RegisterPage() {
         localStorage.setItem("access_token", result.tokens.access_token);
         localStorage.setItem("refresh_token", result.tokens.refresh_token);
         setUser(result.user);
-        toast.success("Account created! Welcome to SUITS.");
+        toast.success("Account created! Welcome to SUIT.");
         navigate("/dashboard");
       } else {
         toast.success("Account created successfully! Please sign in.");
@@ -200,7 +200,7 @@ export default function RegisterPage() {
             >
               S
             </div>
-            SUITS
+            SUIT
           </Link>
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             Create your legal intelligence account

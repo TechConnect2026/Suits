@@ -8,22 +8,22 @@ interface PartyCardProps {
 
 export function PartyCard({ parties }: PartyCardProps) {
   return (
-    <div className="card-float p-6 sm:p-8 space-y-6">
+    <div className="card-float p-4 sm:p-8 space-y-6 min-w-0 max-w-full overflow-hidden">
       <h3 className="text-lg font-semibold tracking-tight flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
         <Users size={18} /> Parties & Advocates
       </h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 min-w-0">
+        <div className="min-w-0">
           <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
             Petitioners / Appellants
           </h4>
-          <ul className="space-y-2">
+          <ul className="space-y-2 min-w-0">
             {parties.petitioners.length > 0 ? (
               parties.petitioners.map((p, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
+                <li key={i} className="flex items-start gap-2 text-sm leading-relaxed min-w-0 break-words" style={{ color: "var(--text-primary)" }}>
                   <User size={14} className="mt-1 flex-shrink-0" style={{ color: "var(--text-muted)" }} /> 
-                  <span>{p}</span>
+                  <span className="min-w-0 break-words">{p}</span>
                 </li>
               ))
             ) : (
@@ -32,23 +32,23 @@ export function PartyCard({ parties }: PartyCardProps) {
           </ul>
 
           {parties.petitioner_advocates.length > 0 && (
-            <div className="mt-4 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
+            <div className="mt-4 pt-3 border-t min-w-0" style={{ borderColor: "var(--border)" }}>
               <span className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: "var(--text-muted)" }}>Advocate</span>
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{parties.petitioner_advocates.join(", ")}</span>
+              <span className="text-sm block break-words" style={{ color: "var(--text-secondary)" }}>{parties.petitioner_advocates.join(", ")}</span>
             </div>
           )}
         </div>
 
-        <div>
+        <div className="min-w-0">
           <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-muted)" }}>
             Respondents / Defendants
           </h4>
-          <ul className="space-y-2">
+          <ul className="space-y-2 min-w-0">
             {parties.respondents.length > 0 ? (
               parties.respondents.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
+                <li key={i} className="flex items-start gap-2 text-sm leading-relaxed min-w-0 break-words" style={{ color: "var(--text-primary)" }}>
                   <User size={14} className="mt-1 flex-shrink-0" style={{ color: "var(--text-muted)" }} /> 
-                  <span>{r}</span>
+                  <span className="min-w-0 break-words">{r}</span>
                 </li>
               ))
             ) : (
@@ -57,9 +57,9 @@ export function PartyCard({ parties }: PartyCardProps) {
           </ul>
 
           {parties.respondent_advocates.length > 0 && (
-            <div className="mt-4 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
+            <div className="mt-4 pt-3 border-t min-w-0" style={{ borderColor: "var(--border)" }}>
               <span className="block text-[11px] uppercase tracking-wider font-semibold mb-1" style={{ color: "var(--text-muted)" }}>Advocate</span>
-              <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{parties.respondent_advocates.join(", ")}</span>
+              <span className="text-sm block break-words" style={{ color: "var(--text-secondary)" }}>{parties.respondent_advocates.join(", ")}</span>
             </div>
           )}
         </div>

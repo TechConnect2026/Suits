@@ -8,10 +8,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
-from app.clients.ecourts_client import ecourts_client
 from app.clients.kanoon_client import kanoon_client
 from app.core.config import settings
-from app.core.exceptions import ECourtsAPIError
 from app.models.cached_case import CachedCase
 from app.repositories.cache_repository import CacheRepository
 from app.schemas.case import (
@@ -354,7 +352,7 @@ def _get_demo_case_details(cnr: str) -> dict[str, Any]:
 
 
 def _transform_case(raw: dict[str, Any], is_cached: bool = False) -> CaseDetailsResponse:
-    """Transform raw eCourts or Kanoon API response into the frontend DTO."""
+    """Transform raw Indian Kanoon API or cached case response into the frontend DTO."""
     enum_lookup: dict[str, Any] = {}
     if isinstance(raw, dict):
         if "data" in raw and isinstance(raw["data"], dict):
@@ -607,7 +605,7 @@ class CaseService:
         self.cache_repo = CacheRepository(db)
 
     async def get_case_details(self, cnr: str, user_id: Any = None) -> CaseDetailsResponse:
-        """Get case details with multi-tier workflow: Redis → Postgres → eCourts API → Indian Kanoon Fallback."""
+        """Get case details with multi-tier workflow: Redis → Postgres → Indian Kanoon Live API."""
         redis_key = f"case:{cnr}"
 
         # Helper to log history safely

@@ -1,0 +1,126 @@
+name: Deploy Backend to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+      - Deployment_AmityPunjab
+    paths:
+      - 'backend/**'
+      - 'docker-compose.ec2.yml'
+      - 'Caddyfile'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy Backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Lowercase Repository Owner for GHCR
+        run: |
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_TAG=ghcr.io/${OWNER_LOWER}/suits-backend:latest" >> $GITHUB_ENV
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy Container to AWS EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          BACKEND_IMAGE: ${{ env.IMAGE_TAG }}
+        run: |
+          if [ -z "$EC2_HOST" ] || [ -z "$EC2_SSH_KEY" ]; then
+            echo "Error: EC2_HOST and EC2_SSH_KEY secrets must be configured in GitHub Repository Secrets."
+            exit 1
+          fi
+
+          EC2_USER="${EC2_USER:-ubuntu}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=60 -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" "mkdir -p ~/suits"
+          scp -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=60 -i ~/.ssh/ec2_key docker-compose.ec2.yml Caddyfile deploy/ec2-setup.sh "${EC2_USER}@${EC2_HOST}:~/suits/"
+
+          if [ -n "$GHCR_PAT" ]; then
+            printf '%s\n' "$GHCR_PAT" | ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=60 -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" \
+              "docker login ghcr.io -u '${GHCR_USER}' --password-stdin"
+          fi
+
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=60 -i ~/.ssh/ec2_key "${EC2_USER}@${EC2_HOST}" \
+            "BACKEND_IMAGE='${BACKEND_IMAGE}' bash -s" << 'EOF'
+            set -euo pipefail
+            cd ~/suits
+
+            if [ ! -f .env ]; then
+              echo "Error: ~/suits/.env is missing on EC2. Create it with DATABASE_URL, API_DOMAIN, and API keys first."
+              exit 1
+            fi
+
+            # Ensure at least 2 GB swap exists to protect from OOM spikes during heavy OCR / embedding tasks
+            if [ ! -f /swapfile ] && command -v sudo >/dev/null 2>&1; then
+              echo "Configuring 2 GB swapfile..."
+              sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 || true
+              sudo chmod 600 /swapfile || true
+              sudo mkswap /swapfile || true
+              sudo swapon /swapfile || true
+            fi
+
+            export BACKEND_IMAGE
+            # Free unused cache and orphaned layers before pulling heavy images
+            docker system prune -f || true
+            docker compose -f docker-compose.ec2.yml pull redis backend || true
+            docker compose -f docker-compose.ec2.yml pull frontend || true
+
+            docker compose -f docker-compose.ec2.yml up -d --remove-orphans
+            docker exec suits_caddy caddy reload --config /etc/caddy/Caddyfile || docker compose -f docker-compose.ec2.yml up -d --force-recreate caddy
+
+            echo "Waiting for backend /api/health..."
+            for i in $(seq 1 25); do
+              if curl -fsS http://127.0.0.1:8000/api/health; then
+                echo ""
+                echo "Backend is healthy!"
+                docker image prune -f
+                exit 0
+              fi
+              echo "Waiting for backend startup (attempt $i/25)..."
+              sleep 3
+            done
+            echo "Backend health check timed out; showing container status & logs:"
+            docker ps -a
+            echo "=== docker logs suits_backend ==="
+            docker logs suits_backend --tail=100 || true
+            echo "=== docker compose logs backend ==="
+            docker compose -f docker-compose.ec2.yml logs --tail=100 backend || true
+            exit 1
+          EOF
+

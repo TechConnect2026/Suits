@@ -86,7 +86,7 @@ export default function LoginPage() {
       return JSON.stringify(detail);
     }
     if (err.message === "Network Error") {
-      return "Unable to connect to SUITS API server. Please check your network connection.";
+      return "Unable to connect to SUIT API server. Please check your network connection.";
     }
     return err.message || "Invalid email or password.";
   };
@@ -184,7 +184,7 @@ export default function LoginPage() {
               letterSpacing: "0.01em",
             }}
           >
-            Suits
+            SUIT
           </span>
           <span
             style={{

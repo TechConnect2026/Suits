@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
 import { ProtectedRoute } from "./protected-route";
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -12,10 +12,8 @@ const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const SearchPage = lazy(() => import("@/pages/SearchPage"));
 const CaseDashboardPage = lazy(() => import("@/pages/CaseDashboardPage"));
 const ChatPage = lazy(() => import("@/pages/ChatPage"));
-const BookmarksPage = lazy(() => import("@/pages/BookmarksPage"));
-const FilesPage = lazy(() => import("@/pages/FilesPage"));
+const VaultPage = lazy(() => import("@/pages/VaultPage"));
 const DocumentPage = lazy(() => import("@/pages/DocumentPage"));
-const ResearchPage = lazy(() => import("@/pages/ResearchPage"));
 const TransitionPage = lazy(() => import("@/pages/TransitionPage"));
 const HistoryPage = lazy(() => import("@/pages/HistoryPage"));
 const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
@@ -93,12 +91,12 @@ const router = createBrowserRouter([
           { path: "/dashboard", element: <Suspense fallback={<PageLoader />}><DashboardPage /></Suspense> },
           { path: "/search", element: <Suspense fallback={<PageLoader />}><SearchPage /></Suspense> },
           { path: "/case/:cnr", element: <Suspense fallback={<PageLoader />}><CaseDashboardPage /></Suspense> },
-          { path: "/chat", element: <Suspense fallback={<PageLoader />}><ChatPage /></Suspense> },
-          { path: "/chat/:conversationId", element: <Suspense fallback={<PageLoader />}><ChatPage /></Suspense> },
-          { path: "/bookmarks", element: <Suspense fallback={<PageLoader />}><BookmarksPage /></Suspense> },
-          { path: "/files", element: <Suspense fallback={<PageLoader />}><FilesPage /></Suspense> },
+          { path: "/chat/:conversationId?", element: <Suspense fallback={<PageLoader />}><ChatPage /></Suspense> },
+          { path: "/vault", element: <Suspense fallback={<PageLoader />}><VaultPage /></Suspense> },
+          { path: "/bookmarks", element: <Navigate to="/vault?tab=bookmarks" replace /> },
+          { path: "/research", element: <Navigate to="/vault?tab=judgments" replace /> },
+          { path: "/files", element: <Navigate to="/vault?tab=documents" replace /> },
           { path: "/document", element: <Suspense fallback={<PageLoader />}><DocumentPage /></Suspense> },
-          { path: "/research", element: <Suspense fallback={<PageLoader />}><ResearchPage /></Suspense> },
           { path: "/transition", element: <Suspense fallback={<PageLoader />}><TransitionPage /></Suspense> },
           { path: "/history", element: <Suspense fallback={<PageLoader />}><HistoryPage /></Suspense> },
           { path: "/analytics", element: <Suspense fallback={<PageLoader />}><AnalyticsPage /></Suspense> },

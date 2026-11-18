@@ -591,7 +591,7 @@ export function CitationGraphCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[660px] rounded-2xl overflow-hidden border select-none transition-all"
+      className="relative w-full max-w-full h-[420px] sm:h-[660px] rounded-2xl overflow-hidden border select-none transition-all min-w-0"
       style={{
         background: "var(--surface)",
         borderColor: "var(--hairline)",

@@ -1,4 +1,4 @@
-"""API usage log model - tracks eCourts API consumption for analytics and cost tracking."""
+"""API usage log model - tracks external legal & AI API consumption for analytics and cost tracking."""
 
 import uuid
 from datetime import datetime, timezone

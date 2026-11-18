@@ -92,14 +92,14 @@ class ForbiddenError(SuitsBaseException):
 
 # --- External API Errors ---
 
-class ECourtsAPIError(SuitsBaseException):
-    """Raised when the eCourts API returns an error."""
+class KanoonAPIError(SuitsBaseException):
+    """Raised when the Indian Kanoon API returns an error."""
 
     def __init__(self, detail: str = "Unable to retrieve court data. Please try again later."):
         super().__init__(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=detail,
-            error_code="ECOURTS_API_ERROR",
+            error_code="KANOON_API_ERROR",
         )
 
 

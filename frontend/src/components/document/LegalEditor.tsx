@@ -1014,11 +1014,11 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-nowrap max-w-full pb-1">
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleCopyText}
-            className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 cursor-pointer"
+            className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 cursor-pointer shrink-0 whitespace-nowrap"
             title="Copy plain text"
           >
             {isCopied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
@@ -1029,7 +1029,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleDownloadDoc}
             disabled={exportingDocx}
-            className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 cursor-pointer"
+            className="btn btn-ghost text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/50 cursor-pointer shrink-0 whitespace-nowrap"
             title="Download Registry Paper-Book (.docx with 1.75in left binding margin)"
           >
             {exportingDocx ? <Loader2 size={13} className="animate-spin text-[var(--brass)]" /> : <Download size={13} style={{ color: "var(--brass)" }} />}
@@ -1039,7 +1039,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={handlePrint}
-            className="btn btn-primary text-xs flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg cursor-pointer"
+            className="btn btn-primary text-xs flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg cursor-pointer shrink-0 whitespace-nowrap"
             style={{
               background: "var(--brass)",
               color: "var(--on-primary)",
@@ -1053,7 +1053,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0 whitespace-nowrap ${
               isFullscreen
                 ? "bg-primary/20 text-primary border border-primary/40"
                 : "border border-border/50 hover:bg-muted/50 text-muted-foreground"
@@ -1076,7 +1076,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleClear}
-            className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors cursor-pointer shrink-0"
             title="Clear Editor"
           >
             <Trash2 size={15} />
@@ -1086,14 +1086,14 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
 
       {/* ── Secondary Toolbar: Indian Court Inserts & Typography Controls ── */}
       <div
-        className="legal-editor-toolbar shrink-0 p-2.5 rounded-xl border flex items-center justify-between gap-3 flex-wrap text-xs shadow-xs"
+        className="legal-editor-toolbar shrink-0 p-2 sm:p-2.5 rounded-xl border flex items-center justify-between gap-2.5 sm:gap-3 overflow-x-auto scrollbar-none flex-nowrap text-xs shadow-xs max-w-full"
         style={{
           background: "var(--surface)",
           borderColor: "var(--hairline)",
         }}
       >
         {/* Formatting Tools */}
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1 flex-nowrap shrink-0">
           {/* Add Page Button */}
           <button
             type="button"
@@ -1341,7 +1341,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
         </div>
 
         {/* ── Custom Styled Typography & Court Controls ── */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-nowrap shrink-0">
           {/* Custom Font Family Menu */}
           <div className="relative editor-dropdown-container">
             <button
@@ -1554,20 +1554,22 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
               key={index}
               className="legal-document-sheet relative shadow-2xl transition-all"
               style={{
-                width: "816px",
-                minHeight: "1120px",
+                width: typeof window !== "undefined" && window.innerWidth < 768 ? "100%" : "816px",
+                maxWidth: "100%",
+                minHeight: typeof window !== "undefined" && window.innerWidth < 768 ? "auto" : "1120px",
                 backgroundColor: activeTheme.bg,
                 color: activeTheme.text,
                 fontFamily: selectedFont,
                 fontSize: selectedSize,
                 lineHeight: selectedSpacing,
-                paddingTop: "1.0in",
-                paddingBottom: "1.0in",
-                paddingLeft: "1.0in",
-                paddingRight: "1.0in",
+                paddingTop: typeof window !== "undefined" && window.innerWidth < 768 ? "24px" : "1.0in",
+                paddingBottom: typeof window !== "undefined" && window.innerWidth < 768 ? "24px" : "1.0in",
+                paddingLeft: typeof window !== "undefined" && window.innerWidth < 768 ? "14px" : "1.0in",
+                paddingRight: typeof window !== "undefined" && window.innerWidth < 768 ? "14px" : "1.0in",
                 borderRadius: "4px",
                 boxShadow: "0 10px 40px -10px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.08)",
                 position: "relative",
+                boxSizing: "border-box",
               }}
               onClick={(e) => handleEditorSheetClick(e, index)}
             >

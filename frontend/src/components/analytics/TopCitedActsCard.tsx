@@ -78,7 +78,7 @@ export function TopCitedActsCard({ statutes }: TopCitedActsCardProps) {
 
         {/* ── Key Statutory Intelligence Strip ─────────────── */}
         {statutes.length > 0 && (
-          <div className="grid grid-cols-3 gap-2.5 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4">
             <div
               className="p-2.5 rounded-xl flex flex-col justify-center transition-all"
               style={{ background: "var(--surface-container)", border: "1px solid var(--hairline)" }}

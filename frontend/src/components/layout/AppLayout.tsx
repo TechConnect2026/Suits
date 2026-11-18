@@ -2,11 +2,11 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import Sidebar from "./Sidebar";
 import { TopSearchBar } from "./TopSearchBar";
+import { MobileHeader } from "./MobileHeader";
 import { CommandPalette } from "@/components/common/CommandPalette";
 import { GlobalVoiceDictation } from "@/components/chat/GlobalVoiceDictation";
 import { SwitchToOllamaModal } from "@/components/common/SwitchToOllamaModal";
 import { useThemeStore } from "@/store/theme-store";
-
 
 export default function AppLayout() {
   const { theme } = useThemeStore();
@@ -23,12 +23,21 @@ export default function AppLayout() {
 
   return (
     <div className="app-shell">
-      {/* Left sidebar with navigation, user profile, and dark mode toggle */}
+      {/* Left sidebar with navigation: desktop fixed, mobile slide-over drawer */}
       <Sidebar />
 
-      {/* Main column: top search bar (when not on search or profile) + page content */}
+      {/* Main column: mobile header + top search bar + page content */}
       <div className="main-column">
-        {!hideTopSearchBar && <TopSearchBar />}
+        {/* Mobile App Bar (< 768px only) */}
+        <div className="block md:hidden">
+          <MobileHeader />
+        </div>
+
+        {!hideTopSearchBar && (
+          <div className="hidden md:block">
+            <TopSearchBar />
+          </div>
+        )}
         <main className="main-content">
           <div className="main-inner">
             <Outlet />
