@@ -1,10 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Cpu, Cloud, WifiOff, Settings } from "lucide-react";
-import { motion } from "motion/react";
-import { toast } from "sonner";
-import { useAuthStore } from "@/store/auth-store";
-import { useAIModeStore } from "@/store/ai-mode-store";
-import { Sun, Moon, X } from "lucide-react";
+import { Sun, Moon, X, Settings } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuthStore } from "@/store/auth-store";
 import { useThemeStore } from "@/store/theme-store";
@@ -21,6 +16,7 @@ function WorkspaceIcon() {
     </svg>
   );
 }
+
 function VaultIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -29,6 +25,7 @@ function VaultIcon() {
     </svg>
   );
 }
+
 function HistoryIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -37,6 +34,7 @@ function HistoryIcon() {
     </svg>
   );
 }
+
 function AnalyticsIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -44,6 +42,7 @@ function AnalyticsIcon() {
     </svg>
   );
 }
+
 function TransitionIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -86,24 +85,18 @@ const navItems = [
   { path: "/document",   label: "Document",   Icon: DocumentIcon },
   { path: "/chat",       label: "Chatbot",    Icon: ChatbotIcon },
   { path: "/transition", label: "Transition", Icon: TransitionIcon },
-  { path: "/analytics", label: "Analytics", Icon: AnalyticsIcon },
-  { path: "/history", label: "History", Icon: HistoryIcon },
+  { path: "/analytics",  label: "Analytics",  Icon: AnalyticsIcon },
+  { path: "/history",    label: "History",    Icon: HistoryIcon },
 ];
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { theme, toggleTheme } = useThemeStore();
+  const { isMobileOpen, closeMobile } = useSidebarStore();
+  const isDark = theme === "dark";
   const isProfileActive = location.pathname === "/profile" || location.pathname === "/settings";
-  const {
-    mode,
-    isOffline,
-    setMode,
-    getEffectiveProvider,
-    checkOllamaHealth,
-  } = useAIModeStore();
-
-  const effectiveProvider = getEffectiveProvider();
 
   const renderNavItems = (isMobile = false) => {
     const items = isMobile
@@ -154,28 +147,47 @@ export default function Sidebar() {
 
   const renderFooter = (isMobile = false) => (
     <div className="sidebar-foot">
-      <div className="sidebar-foot-row">
-        {/* Clicking anywhere on the pill goes to /profile */}
+      <div
+        className="sidebar-foot-row"
+        style={
+          isProfileActive
+            ? {
+                background: "var(--brass-soft)",
+                borderColor: "var(--brass)",
+              }
+            : undefined
+        }
+      >
+        {/* Clicking anywhere on the pill goes to /profile (includes BYOK & Settings) */}
         <button
+          type="button"
           onClick={() => {
             if (isMobile) closeMobile();
             navigate("/profile");
           }}
-          className="sidebar-profile-btn"
-          aria-label="Go to profile"
-          title={user?.full_name || "Profile"}
+          className="sidebar-profile-btn group"
+          aria-label="Profile and Settings"
+          title={`${user?.full_name || "Profile"} · Profile & Settings`}
         >
           <div className="sidebar-avatar">
             {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
           </div>
           <div className="sidebar-user-info">
             <span className="sidebar-user-name">{user?.full_name || "User"}</span>
-            <span className="sidebar-user-role">Advocate</span>
+            <span className="sidebar-user-role flex items-center gap-1">
+              <span>Profile &amp; Settings</span>
+              <Settings
+                size={11}
+                className="shrink-0 transition-transform group-hover:rotate-45"
+                style={{ color: "var(--ink-faint)" }}
+              />
+            </span>
           </div>
         </button>
 
         {/* Dark Mode Toggle */}
         <button
+          type="button"
           onClick={toggleTheme}
           className="sidebar-theme-btn"
           aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
@@ -193,7 +205,7 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* ── DESKTOP SIDEBAR (≥ 768px): 100% untouched layout & design ── */}
+      {/* ── DESKTOP SIDEBAR (≥ 768px) ── */}
       <aside className="sidebar hidden md:flex">
         <div className="sidebar-top">
           <div className="wordmark">
@@ -251,52 +263,12 @@ export default function Sidebar() {
                   {renderNavItems(true)}
                 </nav>
               </div>
-            </div>
-          </div>
-        </nav>
-      </div>
 
-      {/* Footer: Compact Profile & Settings pill */}
-      <div className="sidebar-foot">
-        <button
-          onClick={() => navigate("/profile")}
-          className="sidebar-foot-row w-full group cursor-pointer transition-all"
-          style={{
-            background: isProfileActive ? "var(--brass-soft)" : "var(--lg-panel-bg)",
-            borderColor: isProfileActive ? "var(--brass)" : "var(--lg-border)",
-            padding: "15px 15px 15px 15px",
-            minHeight: "50px",
-          }}
-          aria-label="Profile and Settings"
-          title={`${user?.full_name || "Profile"} · Profile & Settings`}
-        >
-          <div
-            className="sidebar-avatar"
-            style={{ width: "28px", height: "28px", fontSize: "15px" }}
-          >
-            {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
+              {renderFooter(true)}
+            </motion.aside>
           </div>
-          <div className="sidebar-user-info text-left min-w-0 flex-1">
-            <span
-              className="sidebar-user-name"
-              style={{ fontSize: "13px", lineHeight: "1.25" }}
-            >
-              {user?.full_name || "User"}
-            </span>
-            <span
-              className="sidebar-user-role"
-              style={{ fontSize: "10.5px", lineHeight: "1.25" }}
-            >
-              Profile & Settings
-            </span>
-          </div>
-          <Settings
-            size={14}
-            className="shrink-0 transition-transform group-hover:rotate-45"
-            style={{ color: "var(--ink-faint)" }}
-          />
-        </button>
-      </div>
-    </aside>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
