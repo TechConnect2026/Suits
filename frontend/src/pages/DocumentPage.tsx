@@ -306,7 +306,7 @@ export default function DocumentPage() {
       <div className="hidden md:block">
         {/* ── Page Header / Sub-navigation ── */}
         <div className="flex items-center justify-between gap-3 mb-4 sm:mb-6">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-nowrap w-full pb-1">
+          <div className="flex items-center gap-2 flex-wrap w-full pb-1">
           <button
             onClick={() => setShowDraftsDrawer(!showDraftsDrawer)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 whitespace-nowrap"

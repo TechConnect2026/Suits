@@ -139,4 +139,15 @@ export const chatService = {
   deleteConversation: async (conversationId: string) => {
     await api.delete(`/chat/conversations/${conversationId}`);
   },
+
+  transcribeAudio: async (audioBlob: Blob): Promise<string> => {
+    const formData = new FormData();
+    formData.append("file", audioBlob, "dictation.webm");
+    const res = await api.post<APIResponse<{ transcript: string }>>("/chat/transcribe-audio", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.data.data?.transcript || "";
+  },
 };

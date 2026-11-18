@@ -57,6 +57,7 @@ export function GlobalVoiceDictation() {
   const {
     isSupported,
     isListening,
+    isTranscribing,
     interimText,
     audioLevel,
     startListening,
@@ -66,6 +67,12 @@ export function GlobalVoiceDictation() {
     onFinalTranscript: handleFinalTranscript,
     enableChime: true,
   });
+
+  const setIsTranscribing = useDictationStore((s) => s.setIsTranscribing);
+
+  useEffect(() => {
+    setIsTranscribing(isTranscribing);
+  }, [isTranscribing, setIsTranscribing]);
 
   // Sync state to store
   useEffect(() => {

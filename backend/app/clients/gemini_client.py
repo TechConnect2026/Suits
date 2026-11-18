@@ -237,6 +237,44 @@ class GeminiClient:
         logger.error("gemini_pdf_all_models_failed", error=last_error)
         return "*PDF extraction failed. The court order could not be processed at this time.*"
 
+    async def transcribe_audio(self, audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
+        """Transcribe spoken voice audio using Gemini 3.1 Flash Lite."""
+        if not self._ensure_configured():
+            logger.warning("gemini_transcribe_audio_not_configured")
+            return ""
+
+        if not audio_bytes:
+            return ""
+
+        prompt_text = (
+            "You are a specialized Indian legal transcription specialist. "
+            "Accurately transcribe the speech in the attached audio recording into clear text. "
+            "Ensure proper recognition of Indian legal terminology, statute names, and citations "
+            "(e.g., IPC, BNS, CrPC, BNSS, CPC, CPC Order, Writ Petition, SLP, FIR, Vakalatnama, Coram, Section numbers). "
+            "Return ONLY the plain transcribed text with no preamble, no markdown quotes, and no commentary."
+        )
+
+        audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+
+        for model_name in self._model_candidates():
+            try:
+                response = await self.client.aio.models.generate_content(  # type: ignore[union-attr]
+                    model=model_name,
+                    contents=[prompt_text, audio_part],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=2048,
+                    ),
+                )
+                if response and response.text:
+                    logger.info("gemini_audio_transcription_success", model=model_name, size_bytes=len(audio_bytes))
+                    return response.text.strip()
+            except Exception as exc:
+                logger.warning("gemini_audio_transcription_failed", model=model_name, error=str(exc))
+                continue
+
+        return ""
+
     async def generate_suggested_questions(
         self,
         case_context: str,

@@ -1014,7 +1014,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none flex-nowrap max-w-full pb-1">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0 max-w-full pb-1">
           <button
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleCopyText}
@@ -1086,20 +1086,20 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
 
       {/* ── Secondary Toolbar: Indian Court Inserts & Typography Controls ── */}
       <div
-        className="legal-editor-toolbar shrink-0 p-2 sm:p-2.5 rounded-xl border flex items-center justify-between gap-2.5 sm:gap-3 overflow-x-auto scrollbar-none flex-nowrap text-xs shadow-xs max-w-full"
+        className="legal-editor-toolbar shrink-0 p-2 sm:p-2.5 rounded-xl border flex items-center justify-between gap-2.5 sm:gap-3 relative overflow-visible text-xs shadow-xs w-full"
         style={{
           background: "var(--surface)",
           borderColor: "var(--hairline)",
         }}
       >
-        {/* Formatting Tools */}
-        <div className="flex items-center gap-1 flex-nowrap shrink-0">
+        {/* Left Section: Document Actions & Court Formats */}
+        <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
           {/* Add Page Button */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleAddNewPage}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all cursor-pointer hover:opacity-90 active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all cursor-pointer hover:opacity-90 active:scale-95 whitespace-nowrap"
             style={{
               background: "var(--brass-soft)",
               color: "var(--brass-bright)",
@@ -1111,31 +1111,19 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
             <span>Add Page</span>
           </button>
 
-          {onOpenAdversarial && (
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={onOpenAdversarial}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-xs transition-all cursor-pointer hover:opacity-90 active:scale-95"
-              style={{
-                background: "var(--brass-soft)",
-                color: "var(--brass-bright)",
-                border: "1px solid var(--brass)",
-              }}
-              title="Strategic Adversarial War Room: 4-Column Opposition Matrix, Stay Analyzer & Weakness Radar"
-            >
-              <Swords size={13} />
-              <span>Adversarial Strategy</span>
-            </button>
-          )}
-
-          {/* Indian Legal Quick Inserts Dropdown */}
+          {/* Indian Legal Quick Inserts Dropdown (Placed next to Add Page) */}
           <div className="relative editor-dropdown-container">
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setShowInserts(!showInserts)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all cursor-pointer"
+              onClick={() => {
+                setShowInserts(!showInserts);
+                setShowFontMenu(false);
+                setShowSizeMenu(false);
+                setShowSpacingMenu(false);
+                setShowThemeMenu(false);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium text-xs transition-all cursor-pointer whitespace-nowrap"
               style={{
                 background: "var(--brass-soft)",
                 color: "var(--brass-bright)",
@@ -1149,7 +1137,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
 
             {showInserts && (
               <div
-                className="absolute left-0 top-full mt-1.5 w-72 rounded-xl border shadow-xl p-1.5 z-40 space-y-1"
+                className="absolute left-0 top-full mt-1.5 w-72 rounded-xl border shadow-xl p-1.5 z-50 space-y-1 max-h-[70vh] overflow-y-auto"
                 style={{
                   background: "var(--surface)",
                   borderColor: "var(--hairline)",
@@ -1234,9 +1222,10 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
               </div>
             )}
           </div>
+        </div>
 
-          <div className="h-5 w-px bg-border/40 mx-1" />
-
+        {/* Center Section: Center-aligned Bold, Italics, Formatting Tab */}
+        <div className="flex items-center justify-center gap-1 flex-nowrap shrink-0 mx-auto">
           {/* Text Style buttons with onMouseDown preventDefault */}
           <button
             onMouseDown={(e) => e.preventDefault()}
@@ -1263,7 +1252,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
             <Underline size={14} />
           </button>
 
-          <div className="h-5 w-px bg-border/40 mx-1" />
+          <div className="h-4 w-px bg-border/40 mx-1" />
 
           {/* Alignment */}
           <button
@@ -1299,7 +1288,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
             <AlignRight size={14} />
           </button>
 
-          <div className="h-5 w-px bg-border/40 mx-1" />
+          <div className="h-4 w-px bg-border/40 mx-1" />
 
           {/* Lists */}
           <button
@@ -1319,7 +1308,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
             <List size={14} />
           </button>
 
-          <div className="h-5 w-px bg-border/40 mx-1" />
+          <div className="h-4 w-px bg-border/40 mx-1" />
 
           {/* Undo / Redo */}
           <button
@@ -1542,7 +1531,7 @@ export const LegalEditor: React.FC<LegalEditorProps> = ({
 
       {/* ── Document Canvas: Physical Legal Pages (Word-like Gap Layout) ── */}
       <div
-        className={`legal-editor-canvas-container flex flex-col items-center p-4 sm:p-8 bg-muted/25 rounded-2xl border border-border/40 overflow-x-auto ${
+        className={`legal-editor-canvas-container flex flex-col items-center p-4 sm:p-8 bg-muted/25 rounded-2xl border border-border/40 overflow-x-hidden ${
           isFullscreen
             ? "flex-1 min-h-0 overflow-y-auto"
             : "min-h-[850px]"

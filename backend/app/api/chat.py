@@ -1,7 +1,7 @@
 """Chat router - Conversations, Messages, AI Chat."""
 
 import uuid
-from fastapi import APIRouter
+from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.dependencies.auth import CurrentUser, DbSession
@@ -125,3 +125,30 @@ async def stream_message(
             "Connection": "keep-alive",
         },
     )
+
+
+@router.post("/transcribe-audio")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+):
+    """Transcribe speech audio into Indian legal text via Gemini 3.1 Flash Lite."""
+    audio_bytes = await file.read()
+    if not audio_bytes:
+        return APIResponse(data={"transcript": ""}, message="Empty audio.")
+
+    content_type = file.content_type or "audio/webm"
+    if "webm" in content_type:
+        mime_type = "audio/webm"
+    elif "wav" in content_type:
+        mime_type = "audio/wav"
+    elif "ogg" in content_type:
+        mime_type = "audio/ogg"
+    elif "mp4" in content_type or "m4a" in content_type:
+        mime_type = "audio/mp4"
+    else:
+        mime_type = "audio/webm"
+
+    from app.clients.gemini_client import gemini_client
+    transcript = await gemini_client.transcribe_audio(audio_bytes, mime_type=mime_type)
+    return APIResponse(data={"transcript": transcript}, message="Audio transcribed successfully.")
+

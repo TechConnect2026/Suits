@@ -3,6 +3,7 @@ import { LegalCorrection } from "@/lib/dictation/legalCorrectionEngine";
 
 interface DictationState {
   isDictating: boolean;
+  isTranscribing: boolean;
   audioLevel: number;
   interimText: string;
   recentCorrections: LegalCorrection[];
@@ -10,6 +11,7 @@ interface DictationState {
   pendingFullScreenPrompt: string | null;
 
   setIsDictating: (isDictating: boolean) => void;
+  setIsTranscribing: (isTranscribing: boolean) => void;
   setAudioLevel: (audioLevel: number) => void;
   setInterimText: (interimText: string) => void;
   setRecentCorrections: (corrections: LegalCorrection[]) => void;
@@ -20,6 +22,7 @@ interface DictationState {
 
 export const useDictationStore = create<DictationState>((set) => ({
   isDictating: false,
+  isTranscribing: false,
   audioLevel: 0,
   interimText: "",
   recentCorrections: [],
@@ -27,6 +30,7 @@ export const useDictationStore = create<DictationState>((set) => ({
   pendingFullScreenPrompt: null,
 
   setIsDictating: (isDictating) => set({ isDictating }),
+  setIsTranscribing: (isTranscribing) => set({ isTranscribing }),
   setAudioLevel: (audioLevel) => set({ audioLevel }),
   setInterimText: (interimText) => set({ interimText }),
   setRecentCorrections: (recentCorrections) => set({ recentCorrections }),

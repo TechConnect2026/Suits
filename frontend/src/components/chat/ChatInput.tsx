@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ArrowUp, Sparkles, Plus, Mic, MicOff } from "lucide-react";
+import { ArrowUp, Sparkles, Plus, Mic, MicOff, Loader2 } from "lucide-react";
 import { useLegalSpeechRecognition } from "@/hooks/useLegalSpeechRecognition";
 import { LegalCorrection } from "@/lib/dictation/legalCorrectionEngine";
 import { LegalWaveformVisualizer } from "./LegalWaveformVisualizer";
@@ -25,6 +25,7 @@ export function ChatInput({
   const {
     isSupported,
     isListening,
+    isTranscribing,
     interimText,
     audioLevel,
     startListening,
@@ -180,17 +181,42 @@ export function ChatInput({
           <button
             type="button"
             onClick={handleToggleMic}
+            disabled={isTranscribing}
             className={`w-9 h-9 rounded-xl flex-shrink-0 transition-all cursor-pointer flex items-center justify-center self-end ${
               isListening ? "animate-pulse" : ""
             }`}
             style={{
-              background: isListening ? "rgba(239, 68, 68, 0.2)" : "var(--surface-container)",
-              color: isListening ? "#ef4444" : "var(--brass)",
-              border: isListening ? "1px solid rgba(239, 68, 68, 0.5)" : "1px solid transparent",
+              background: isListening
+                ? "rgba(239, 68, 68, 0.2)"
+                : isTranscribing
+                ? "rgba(245, 158, 11, 0.15)"
+                : "var(--surface-container)",
+              color: isListening
+                ? "#ef4444"
+                : isTranscribing
+                ? "#f59e0b"
+                : "var(--brass)",
+              border: isListening
+                ? "1px solid rgba(239, 68, 68, 0.5)"
+                : isTranscribing
+                ? "1px solid rgba(245, 158, 11, 0.4)"
+                : "1px solid transparent",
             }}
-            title={isListening ? "Stop Voice Dictation" : "Dictate with Indian Legal Lexicon"}
+            title={
+              isTranscribing
+                ? "Transcribing voice with Gemini AI..."
+                : isListening
+                ? "Listening... Click to finish speaking or press Alt+Z"
+                : "Voice Dictation: Click to speak or press Alt+Z"
+            }
           >
-            {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+            {isTranscribing ? (
+              <Loader2 size={16} className="animate-spin text-amber-500" />
+            ) : isListening ? (
+              <MicOff size={16} />
+            ) : (
+              <Mic size={16} />
+            )}
           </button>
         )}
 
