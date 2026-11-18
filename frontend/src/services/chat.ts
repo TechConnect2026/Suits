@@ -1,4 +1,4 @@
-import api from "@/lib/axios";
+import api, { getOrRefreshToken } from "@/lib/axios";
 import type { APIResponse } from "@/types/common";
 import type { Conversation, ChatMessage, ChatResponse } from "@/types/chat";
 
@@ -113,39 +113,16 @@ export const chatService = {
 
     const run = async () => {
       try {
-        let token = localStorage.getItem("access_token") ?? "";
+        let token = (await getOrRefreshToken()) || "";
         const ok = await doStream(token);
 
         if (!ok) {
-          // 401 — try to refresh the token once
-          const refreshToken = localStorage.getItem("refresh_token");
-          if (refreshToken) {
-            try {
-              const res = await fetch(
-                `${BASE_URL}/auth/refresh`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ refresh_token: refreshToken }),
-                }
-              );
-              if (res.ok) {
-                const data = await res.json();
-                const newToken = data?.data?.access_token;
-                if (newToken) {
-                  localStorage.setItem("access_token", newToken);
-                  if (data?.data?.refresh_token) {
-                    localStorage.setItem("refresh_token", data.data.refresh_token);
-                  }
-                  await doStream(newToken);
-                  return;
-                }
-              }
-            } catch {
-              // refresh network failure
-            }
+          // 401 — try to refresh the token and retry once
+          token = (await getOrRefreshToken()) || "";
+          if (token) {
+            const retryOk = await doStream(token);
+            if (retryOk) return;
           }
-          window.dispatchEvent(new Event("auth:logout"));
           onError("Session expired. Please log in again.");
         }
       } catch (err: unknown) {

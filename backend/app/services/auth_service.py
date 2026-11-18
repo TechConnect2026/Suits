@@ -294,7 +294,15 @@ class AuthService:
             raise UnauthorizedError("Invalid or expired refresh token.")
 
         user_id = payload.get("sub")
-        user = await self.repo.get_by_id(uuid.UUID(user_id))
+        if not user_id:
+            raise UnauthorizedError("Invalid token subject.")
+
+        try:
+            user_uuid = uuid.UUID(str(user_id))
+        except (ValueError, TypeError):
+            raise UnauthorizedError("Invalid token subject.")
+
+        user = await self.repo.get_by_id(user_uuid)
         if not user:
             raise UnauthorizedError("User not found.")
 
