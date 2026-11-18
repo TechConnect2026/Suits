@@ -12,7 +12,6 @@ from app.core.exceptions import SuitsBaseException
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.api import auth, search, cases, orders, chat, bookmarks, history, analytics, files, documents, statutes, counter_pleading, drafting, adversarial, precedents, api_keys
-from app.clients.ecourts_client import ecourts_client
 from app.clients.kanoon_client import kanoon_client
 from app.services.cache_service import cache_service
 from app.database.session import engine, init_db

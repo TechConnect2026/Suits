@@ -159,48 +159,22 @@ class AIOrchestrator:
                 temperature=temperature,
             )
 
-        # Platform Cloud AI execution path: Gemini primary -> Groq fallback -> OpenRouter safety net
+        # Platform Cloud AI execution path: Gemini primary -> OpenRouter safety net
         logger.info("ai_orchestrator_routing_to_gemini_primary", task="generate_json_gemini_first")
         try:
             gemini_raw, _ = await prediction_gemini_client.generate_prediction_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
             )
-            if gemini_raw and isinstance(gemini_raw, dict) and (gemini_raw.get("executiveSummary") or gemini_raw.get("caseNumber")):
+            if gemini_raw and isinstance(gemini_raw, dict):
                 return gemini_raw
         except Exception as g_err:
-            logger.warning("orchestrator_gemini_first_failed_trying_groq", error=str(g_err))
+            g_err_str = str(g_err).lower()
+            logger.error("orchestrator_gemini_first_failed", error=str(g_err))
+            if "429" in g_err_str or "quota" in g_err_str or "rate limit" in g_err_str or "resource_exhausted" in g_err_str:
+                raise OnlineAILimitReachedError() from g_err
 
-        try:
-            from app.clients.groq_client import groq_client
-            groq_raw = await groq_client.generate_json(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=temperature,
-                max_output_tokens=max_tokens or 8192,
-            )
-            if groq_raw and isinstance(groq_raw, dict) and (groq_raw.get("executiveSummary") or groq_raw.get("caseNumber")):
-                logger.info("orchestrator_groq_fallback_success", task="generate_json_gemini_first")
-                return groq_raw
-        except Exception as gr_err:
-            logger.warning("orchestrator_groq_fallback_failed_trying_openrouter", error=str(gr_err))
-
-        # OpenRouter fallback for structured extraction when Gemini & Groq are unconfigured or depleted
-        try:
-            logger.info("ai_orchestrator_routing_to_openrouter_json_fallback", task="generate_json_gemini_first")
-            or_raw = await openrouter_client.generate_json(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                temperature=temperature,
-                max_output_tokens=max_tokens or 4096,
-            )
-            if or_raw and isinstance(or_raw, dict):
-                logger.info("orchestrator_openrouter_fallback_success", task="generate_json_gemini_first")
-                return or_raw
-        except Exception as or_err:
-            logger.error("orchestrator_openrouter_fallback_failed", error=str(or_err))
-
-        raise OnlineAILimitReachedError("Online AI services (Gemini, Groq, and OpenRouter) unavailable or quota exhausted.")
+        raise OnlineAILimitReachedError("Online AI service (Gemini) unavailable or quota exhausted.")
 
     async def generate_text(
         self,
@@ -268,7 +242,7 @@ class AIOrchestrator:
         force_provider: str | None = None,
         user_id: Any | None = None,
     ) -> str:
-        """Generate text routing User BYOK -> Gemini -> Groq fallback."""
+        """Generate text routing User BYOK -> Gemini primary (or Local Ollama)."""
         use_local = (force_provider == "ollama") or (force_provider is None and self.is_local())
 
         if use_local:
@@ -290,7 +264,7 @@ class AIOrchestrator:
                 temperature=temperature if temperature is not None else 0.2,
             )
 
-        # Platform Cloud AI execution path: Gemini primary -> Groq fallback
+        # Platform Cloud AI execution path: Gemini primary
         logger.info("ai_orchestrator_routing_to_gemini_text_primary", task="generate_text_gemini_first")
         try:
             result = await gemini_client.generate(
