@@ -29,16 +29,14 @@ logger = structlog.get_logger()
 # Verified live models on OpenRouter with free tier (:free)
 # ---------------------------------------------------------------------------
 _FREE_MODEL_POOL: list[str] = [
-    "openrouter/free",                           # OpenRouter auto-router across all healthy free models
-    "google/gemma-4-31b-it:free",                # Gemma 4 31B (verified live, 262k ctx, JSON support)
-    "google/gemma-4-26b-a4b-it:free",            # Gemma 4 26B (verified live, 262k ctx, JSON support)
-    "nvidia/nemotron-3-super-120b-a12b:free",    # Nemotron 3 Super 120B (verified live, JSON support)
-    "nex-agi/nex-n2.5-pro:free",                 # Nex N2.5 Pro (verified live, JSON support)
-    "nex-agi/nex-n2.5-mini:free",                # Nex N2.5 Mini (verified live, JSON support)
-    "qwen/qwen3.8-27b:free",                     # Qwen 3.8 27B (verified live)
-    "nvidia/nemotron-3-ultra-550b-a55b:free",    # Nemotron 3 Ultra 550B (verified live)
-    "z-ai/glm-5.2:free",                         # GLM 5.2 free tier
-    "liquid/lfm-2.5-2.6b:free",                  # Liquid LFM 2.5 2.6B
+    "baidu/ernie-5.5-flash-preview:free",        # Verified: fast direct JSON output
+    "cohere/north-mini-code:free",               # Verified: fast direct JSON output
+    "particle-ai/particle-1:free",               # Verified: fast direct JSON output
+    "nvidia/nemotron-3-ultra-550b-a55b:free",    # Verified: fast direct JSON output
+    "openrouter/free",                           # Auto-router fallback
+    "nvidia/nemotron-3.5-lightning:free",        # Fast text & reasoning
+    "inclusionai/ling-3.2-flash:free",           # Fast text
+    "liquid/lfm-3-1.7b:free",                    # Fast text
 ]
 
 # Error status codes that indicate rate limiting / overload (trigger cooldown)
@@ -335,17 +333,60 @@ class OpenRouterClient:
                     else:
                         raise rf_exc
 
-                if response and response.choices and response.choices[0].message.content:
-                    content = response.choices[0].message.content.strip()
-                    if content.startswith("```"):
+                if response and response.choices:
+                    msg = response.choices[0].message
+                    raw_content = msg.content or getattr(msg, "reasoning", "") or ""
+                    if not raw_content and hasattr(msg, "model_extra") and msg.model_extra:
+                        raw_content = msg.model_extra.get("reasoning", "") or ""
+
+                    content = raw_content.strip() if raw_content else ""
+                    if content:
                         import re
-                        content = re.sub(r"^```(?:json)?\s*", "", content)
-                        content = re.sub(r"\s*```$", "", content)
-                    content = content.strip()
-                    parsed = json.loads(content)
-                    logger.info("openrouter_json_success", model=model)
-                    _router.advance()
-                    return parsed
+                        candidates: list[dict[str, Any]] = []
+
+                        # 1. Try direct json.loads of entire content
+                        try:
+                            p = json.loads(content)
+                            if isinstance(p, dict):
+                                candidates.append(p)
+                        except Exception:
+                            pass
+
+                        # 2. Try all fenced blocks
+                        matches = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", content, re.IGNORECASE)
+                        for m in matches:
+                            try:
+                                p = json.loads(m.strip())
+                                if isinstance(p, dict):
+                                    candidates.append(p)
+                            except Exception:
+                                pass
+
+                        # 3. Try outermost braces of content
+                        start = content.find("{")
+                        end = content.rfind("}")
+                        if start != -1 and end != -1 and end > start:
+                            try:
+                                p = json.loads(content[start : end + 1])
+                                if isinstance(p, dict):
+                                    candidates.append(p)
+                            except Exception:
+                                pass
+
+                        if candidates:
+                            # Prefer candidate with executiveSummary/caseNumber or the one with the most keys
+                            best = max(
+                                candidates,
+                                key=lambda c: (
+                                    1 if ("executiveSummary" in c or "executive_summary" in c or "caseNumber" in c) else 0,
+                                    len(c.keys()),
+                                ),
+                            )
+                            logger.info("openrouter_json_success", model=model, keys_count=len(best))
+                            _router.advance()
+                            return best
+
+                    logger.warning("openrouter_model_empty_or_non_json", model=model, content_len=len(content))
             except Exception as exc:
                 last_error = exc
                 is_rl, retry_after = _is_rate_limit_error(exc)

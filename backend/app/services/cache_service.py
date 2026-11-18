@@ -77,10 +77,17 @@ class CacheService:
 
         return None
 
-    async def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
-        """Set a value in cache (both in-memory and Redis)."""
+    async def set(
+        self,
+        key: str,
+        value: Any,
+        ttl_seconds: int | None = None,
+        ttl: int | None = None,
+    ) -> None:
+        """Set a value in cache (both in-memory and Redis). Accepts either ttl_seconds or ttl."""
+        effective_ttl = ttl_seconds if ttl_seconds is not None else ttl
         # 1. Save to in-memory cache
-        expiry = time.time() + ttl_seconds if ttl_seconds else None
+        expiry = time.time() + effective_ttl if effective_ttl else None
         self._memory_cache[key] = (expiry, value)
         self._prune_memory_cache()
 
@@ -89,11 +96,11 @@ class CacheService:
         if r is not None:
             try:
                 serialized = json.dumps(value, default=str)
-                if ttl_seconds:
-                    await r.setex(key, ttl_seconds, serialized)
+                if effective_ttl:
+                    await r.setex(key, effective_ttl, serialized)
                 else:
                     await r.set(key, serialized)
-                logger.debug("cache_set", key=key, ttl=ttl_seconds)
+                logger.debug("cache_set", key=key, ttl=effective_ttl)
             except Exception as exc:
                 logger.debug("cache_set_error", key=key, error=str(exc))
 

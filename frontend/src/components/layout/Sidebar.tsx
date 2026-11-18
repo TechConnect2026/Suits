@@ -1,4 +1,9 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Cpu, Cloud, WifiOff, Settings } from "lucide-react";
+import { motion } from "motion/react";
+import { toast } from "sonner";
+import { useAuthStore } from "@/store/auth-store";
+import { useAIModeStore } from "@/store/ai-mode-store";
 import { Sun, Moon, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAuthStore } from "@/store/auth-store";
@@ -81,17 +86,24 @@ const navItems = [
   { path: "/document",   label: "Document",   Icon: DocumentIcon },
   { path: "/chat",       label: "Chatbot",    Icon: ChatbotIcon },
   { path: "/transition", label: "Transition", Icon: TransitionIcon },
-  { path: "/analytics",  label: "Analytics",  Icon: AnalyticsIcon },
-  { path: "/history",    label: "History",    Icon: HistoryIcon },
+  { path: "/analytics", label: "Analytics", Icon: AnalyticsIcon },
+  { path: "/history", label: "History", Icon: HistoryIcon },
 ];
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { theme, toggleTheme } = useThemeStore();
-  const { isMobileOpen, closeMobile } = useSidebarStore();
-  const isDark = theme === "dark";
+  const isProfileActive = location.pathname === "/profile" || location.pathname === "/settings";
+  const {
+    mode,
+    isOffline,
+    setMode,
+    getEffectiveProvider,
+    checkOllamaHealth,
+  } = useAIModeStore();
+
+  const effectiveProvider = getEffectiveProvider();
 
   const renderNavItems = (isMobile = false) => {
     const items = isMobile
@@ -239,12 +251,52 @@ export default function Sidebar() {
                   {renderNavItems(true)}
                 </nav>
               </div>
-
-              {renderFooter(true)}
-            </motion.aside>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
-    </>
+        </nav>
+      </div>
+
+      {/* Footer: Compact Profile & Settings pill */}
+      <div className="sidebar-foot">
+        <button
+          onClick={() => navigate("/profile")}
+          className="sidebar-foot-row w-full group cursor-pointer transition-all"
+          style={{
+            background: isProfileActive ? "var(--brass-soft)" : "var(--lg-panel-bg)",
+            borderColor: isProfileActive ? "var(--brass)" : "var(--lg-border)",
+            padding: "15px 15px 15px 15px",
+            minHeight: "50px",
+          }}
+          aria-label="Profile and Settings"
+          title={`${user?.full_name || "Profile"} · Profile & Settings`}
+        >
+          <div
+            className="sidebar-avatar"
+            style={{ width: "28px", height: "28px", fontSize: "15px" }}
+          >
+            {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
+          </div>
+          <div className="sidebar-user-info text-left min-w-0 flex-1">
+            <span
+              className="sidebar-user-name"
+              style={{ fontSize: "13px", lineHeight: "1.25" }}
+            >
+              {user?.full_name || "User"}
+            </span>
+            <span
+              className="sidebar-user-role"
+              style={{ fontSize: "10.5px", lineHeight: "1.25" }}
+            >
+              Profile & Settings
+            </span>
+          </div>
+          <Settings
+            size={14}
+            className="shrink-0 transition-transform group-hover:rotate-45"
+            style={{ color: "var(--ink-faint)" }}
+          />
+        </button>
+      </div>
+    </aside>
   );
 }

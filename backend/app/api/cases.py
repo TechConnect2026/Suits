@@ -72,7 +72,7 @@ async def get_case_prediction(cnr: str, user: CurrentUser, db: DbSession):
 
     cnr = _validate_cnr(cnr)
     service = PredictionService(db)
-    pred = await service.get_case_prediction(cnr)
+    pred = await service.get_case_prediction(cnr, user_id=user.id)
     if pred is None:
         return Response(status_code=204)
     return APIResponse(data=pred.model_dump())
@@ -86,7 +86,7 @@ async def refresh_case_prediction(cnr: str, user: CurrentUser, db: DbSession):
 
     cnr = _validate_cnr(cnr)
     service = PredictionService(db)
-    pred = await service.get_case_prediction(cnr, force_refresh=True)
+    pred = await service.get_case_prediction(cnr, force_refresh=True, user_id=user.id)
     if pred is None:
         return Response(status_code=204)
     return APIResponse(data=pred.model_dump(), message="Prediction refreshed.")
@@ -105,7 +105,7 @@ async def get_case_headnote(
 
     cnr = _validate_cnr(cnr)
     service = HeadnoteService(db)
-    headnote_resp = await service.get_or_generate_headnote(cnr, filename=filename)
+    headnote_resp = await service.get_or_generate_headnote(cnr, filename=filename, user_id=user.id)
     if headnote_resp is None:
         return Response(status_code=204)
     return APIResponse(data=headnote_resp.model_dump())
@@ -124,7 +124,7 @@ async def refresh_case_headnote(
 
     cnr = _validate_cnr(cnr)
     service = HeadnoteService(db)
-    headnote_resp = await service.get_or_generate_headnote(cnr, filename=filename, force_refresh=True)
+    headnote_resp = await service.get_or_generate_headnote(cnr, filename=filename, force_refresh=True, user_id=user.id)
     if headnote_resp is None:
         return Response(status_code=204)
     return APIResponse(data=headnote_resp.model_dump(), message="Headnote refreshed.")
@@ -166,7 +166,7 @@ async def get_case_era_transition_cases(
 
     cnr = _validate_cnr(cnr)
     service = EraTransitionService(db)
-    analysis = await service.analyze_case_transition(cnr)
+    analysis = await service.analyze_case_transition(cnr, user_id=user.id)
     if analysis is None:
         return Response(status_code=204)
     return APIResponse(data=analysis.model_dump())
@@ -184,7 +184,7 @@ async def refresh_case_era_transition_cases(
 
     cnr = _validate_cnr(cnr)
     service = EraTransitionService(db)
-    analysis = await service.analyze_case_transition(cnr, force_refresh=True)
+    analysis = await service.analyze_case_transition(cnr, force_refresh=True, user_id=user.id)
     if analysis is None:
         return Response(status_code=204)
     return APIResponse(data=analysis.model_dump(), message="Era transition analysis refreshed.")

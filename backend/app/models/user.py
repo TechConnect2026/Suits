@@ -58,3 +58,4 @@ class User(Base):
     case_view_history = relationship("CaseViewHistory", back_populates="user", cascade="all, delete-orphan")
     saved_files = relationship("SavedFile", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("UserDocument", back_populates="user", cascade="all, delete-orphan")
+    api_keys = relationship("UserApiKey", back_populates="user", cascade="all, delete-orphan")

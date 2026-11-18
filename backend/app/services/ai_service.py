@@ -178,6 +178,7 @@ class AIService:
         conversation_id: uuid.UUID,
         user_message: str,
         order_filename: str | None = None,
+        user_id: uuid.UUID | None = None,
     ) -> ChatResponse:
         """Process a user chat message and return a complete AI response (non-streaming)."""
         cnr, order_context, history, case_context = await self._load_context(
@@ -246,6 +247,7 @@ class AIService:
             user_message=user_message,
             case_context=case_context if case_context else ("This is a general legal inquiry. No specific case is loaded. Answer using your general legal knowledge about Indian law." if is_general else "No case context available."),
             order_context=order_context,
+            user_id=user_id,
         )
 
         assistant_msg = Message(
@@ -273,6 +275,7 @@ class AIService:
         conversation_id: uuid.UUID,
         user_message: str,
         order_filename: str | None = None,
+        user_id: uuid.UUID | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream AI response tokens as Server-Sent Events."""
         try:
@@ -332,6 +335,7 @@ class AIService:
                 user_message=user_message,
                 case_context=effective_context,
                 order_context=order_context,
+                user_id=user_id,
             ):
                 if token:
                     full_response.append(token)

@@ -1,9 +1,11 @@
-"""AI Orchestrator — Dynamic Routing between Cloud AI and Local Ollama (Qwen 7B).
+"""AI Orchestrator — Dynamic Routing between User BYOK, Cloud AI, and Local Ollama.
 
 Centralizes execution across all AI features in SUITS:
-1. Online / Cloud Mode (Default): Uses OpenRouter / Gemini free-tier model rotation.
-2. Offline / Local Mode: Uses Local Ollama with Qwen 7B (0 tokens, complete offline privacy).
-3. Graceful Limit Detection: Intercepts rate limits (HTTP 429) or quota depletion and raises
+1. User BYOK Mode: If the authenticated user has configured their own personal API key
+   (Gemini, OpenAI, Claude, OpenRouter, Groq), ALL requests route through their chosen key.
+2. Platform Cloud Mode (Default): Uses OpenRouter free pool / Gemini rotation.
+3. Offline / Local Mode: Uses Local Ollama with Qwen 7B (0 tokens, complete offline privacy).
+4. Graceful Limit Detection: Intercepts rate limits (HTTP 429) or quota depletion and raises
    `OnlineAILimitReachedError` to trigger the frontend switch-to-Ollama modal.
 """
 
@@ -19,7 +21,7 @@ from app.clients.ollama_client import ollama_client
 from app.clients.openrouter_client import openrouter_client
 from app.clients.prediction_gemini_client import prediction_gemini_client
 from app.core.exceptions import OnlineAILimitReachedError
-from app.middleware.ai_provider import is_local_ai_active
+from app.middleware.ai_provider import is_local_ai_active, get_active_byok_provider, get_active_user_id
 
 logger = structlog.get_logger()
 
@@ -32,6 +34,28 @@ class AIOrchestrator:
         """Check if Local Ollama mode is requested for the current request context."""
         return is_local_ai_active()
 
+    async def _get_byok(self, user_id: Any | None = None) -> Any:
+        """Resolve active BYOK provider from ContextVar or user_id."""
+        byok = get_active_byok_provider()
+        if byok:
+            return byok
+
+        effective_uid = user_id or get_active_user_id()
+        if effective_uid:
+            try:
+                import uuid
+                u_uuid = effective_uid if isinstance(effective_uid, uuid.UUID) else uuid.UUID(str(effective_uid))
+                from app.database.session import async_session_factory
+                from app.services.byok_service import byok_service
+                async with async_session_factory() as db:
+                    resolved = await byok_service.get_active_provider(u_uuid, db)
+                    if resolved:
+                        logger.info("byok_resolved_from_user_id", user_id=str(effective_uid), provider=resolved.provider, model=resolved.model)
+                        return resolved
+            except Exception as exc:
+                logger.warning("byok_user_id_lookup_failed", user_id=str(effective_uid), error=str(exc))
+        return None
+
     async def generate_json(
         self,
         system_prompt: str,
@@ -39,8 +63,9 @@ class AIOrchestrator:
         temperature: float = 0.1,
         max_tokens: int | None = None,
         force_provider: str | None = None,
+        user_id: Any | None = None,
     ) -> dict[str, Any]:
-        """Generate structured JSON using either Ollama (local) or OpenRouter/Gemini (cloud)."""
+        """Generate structured JSON using either Ollama (local), User BYOK, or Platform Cloud."""
         use_local = (force_provider == "ollama") or (force_provider is None and self.is_local())
 
         if use_local:
@@ -52,6 +77,18 @@ class AIOrchestrator:
                 max_tokens=max_tokens or 2048,
             )
 
+        # Check for User BYOK Provider
+        byok = await self._get_byok(user_id)
+        if byok and force_provider is None:
+            logger.info("ai_orchestrator_routing_to_user_byok", provider=byok.provider, model=byok.model, task="generate_json")
+            # Strict BYOK mode: DO NOT fall back to platform providers when user has their own key active
+            return await byok.generate_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=max_tokens or 4096,
+                temperature=temperature,
+            )
+
         if force_provider == "gemini":
             return await self.generate_json_gemini_first(
                 system_prompt=system_prompt,
@@ -60,7 +97,7 @@ class AIOrchestrator:
                 max_tokens=max_tokens,
             )
 
-        # Cloud AI execution path
+        # Platform Cloud AI execution path
         logger.info("ai_orchestrator_routing_to_cloud", task="generate_json")
         try:
             # 1. Try OpenRouter free tier
@@ -71,7 +108,6 @@ class AIOrchestrator:
             err_str = str(or_err).lower()
             logger.warning("orchestrator_openrouter_failed_trying_gemini", error=str(or_err))
             if "429" in err_str or "quota" in err_str or "rate limit" in err_str or "credits" in err_str:
-                # If OpenRouter is rate-limited, try Gemini next
                 pass
 
         try:
@@ -88,7 +124,6 @@ class AIOrchestrator:
             if "429" in g_err_str or "quota" in g_err_str or "rate limit" in g_err_str or "resource_exhausted" in g_err_str:
                 raise OnlineAILimitReachedError() from g_err
 
-        # If both cloud providers returned empty/failed, raise limit or general error
         raise OnlineAILimitReachedError("Online AI services unavailable or quota exhausted.")
 
     async def generate_json_gemini_first(
@@ -98,12 +133,9 @@ class AIOrchestrator:
         temperature: float = 0.1,
         max_tokens: int | None = None,
         force_provider: str | None = None,
+        user_id: Any | None = None,
     ) -> dict[str, Any]:
-        """Generate structured JSON routing strictly via Gemini in cloud mode.
-
-        Bypasses OpenRouter entirely.
-        Preserves local Ollama routing when local AI mode is active.
-        """
+        """Generate structured JSON routing User BYOK -> Gemini (gemini-3.5-flash) -> Groq fallback."""
         use_local = (force_provider == "ollama") or (force_provider is None and self.is_local())
 
         if use_local:
@@ -115,22 +147,60 @@ class AIOrchestrator:
                 max_tokens=max_tokens or 2048,
             )
 
-        # Cloud AI execution path: Gemini primary
+        # Check for User BYOK Provider
+        byok = await self._get_byok(user_id)
+        if byok and force_provider is None:
+            logger.info("ai_orchestrator_routing_to_user_byok", provider=byok.provider, model=byok.model, task="generate_json_gemini_first")
+            # Strict BYOK mode: DO NOT fall back to platform providers when user has their own key active
+            return await byok.generate_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=max_tokens or 4096,
+                temperature=temperature,
+            )
+
+        # Platform Cloud AI execution path: Gemini primary -> Groq fallback -> OpenRouter safety net
         logger.info("ai_orchestrator_routing_to_gemini_primary", task="generate_json_gemini_first")
         try:
             gemini_raw, _ = await prediction_gemini_client.generate_prediction_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
             )
-            if gemini_raw and isinstance(gemini_raw, dict):
+            if gemini_raw and isinstance(gemini_raw, dict) and (gemini_raw.get("executiveSummary") or gemini_raw.get("caseNumber")):
                 return gemini_raw
         except Exception as g_err:
-            g_err_str = str(g_err).lower()
-            logger.error("orchestrator_gemini_first_failed", error=str(g_err))
-            if "429" in g_err_str or "quota" in g_err_str or "rate limit" in g_err_str or "resource_exhausted" in g_err_str:
-                raise OnlineAILimitReachedError() from g_err
+            logger.warning("orchestrator_gemini_first_failed_trying_groq", error=str(g_err))
 
-        raise OnlineAILimitReachedError("Online AI service (Gemini) unavailable or quota exhausted.")
+        try:
+            from app.clients.groq_client import groq_client
+            groq_raw = await groq_client.generate_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                max_output_tokens=max_tokens or 8192,
+            )
+            if groq_raw and isinstance(groq_raw, dict) and (groq_raw.get("executiveSummary") or groq_raw.get("caseNumber")):
+                logger.info("orchestrator_groq_fallback_success", task="generate_json_gemini_first")
+                return groq_raw
+        except Exception as gr_err:
+            logger.warning("orchestrator_groq_fallback_failed_trying_openrouter", error=str(gr_err))
+
+        # OpenRouter fallback for structured extraction when Gemini & Groq are unconfigured or depleted
+        try:
+            logger.info("ai_orchestrator_routing_to_openrouter_json_fallback", task="generate_json_gemini_first")
+            or_raw = await openrouter_client.generate_json(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=temperature,
+                max_output_tokens=max_tokens or 4096,
+            )
+            if or_raw and isinstance(or_raw, dict):
+                logger.info("orchestrator_openrouter_fallback_success", task="generate_json_gemini_first")
+                return or_raw
+        except Exception as or_err:
+            logger.error("orchestrator_openrouter_fallback_failed", error=str(or_err))
+
+        raise OnlineAILimitReachedError("Online AI services (Gemini, Groq, and OpenRouter) unavailable or quota exhausted.")
 
     async def generate_text(
         self,
@@ -138,8 +208,9 @@ class AIOrchestrator:
         system_prompt: str = "",
         temperature: float | None = None,
         force_provider: str | None = None,
+        user_id: Any | None = None,
     ) -> str:
-        """Generate unstructured text response using either Ollama or Cloud AI."""
+        """Generate unstructured text response using either Ollama, User BYOK, or Platform Cloud."""
         use_local = (force_provider == "ollama") or (force_provider is None and self.is_local())
 
         if use_local:
@@ -150,14 +221,26 @@ class AIOrchestrator:
                 temperature=temperature,
             )
 
+        # Check for User BYOK Provider
+        byok = await self._get_byok(user_id)
+        if byok and force_provider is None:
+            logger.info("ai_orchestrator_text_routing_to_user_byok", provider=byok.provider, model=byok.model)
+            # Strict BYOK mode: DO NOT fall back to platform providers when user has their own key active
+            return await byok.generate_text(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=temperature if temperature is not None else 0.2,
+            )
+
         if force_provider == "gemini":
             return await self.generate_text_gemini_first(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 temperature=temperature,
+                user_id=user_id,
             )
 
-        # Cloud AI execution path
+        # Platform Cloud AI execution path
         try:
             result = await openrouter_client.generate(user_prompt=prompt, system_prompt=system_prompt)
             if result and result.strip():
@@ -183,12 +266,9 @@ class AIOrchestrator:
         system_prompt: str = "",
         temperature: float | None = None,
         force_provider: str | None = None,
+        user_id: Any | None = None,
     ) -> str:
-        """Generate text routing strictly via Gemini in cloud mode.
-
-        Bypasses OpenRouter entirely.
-        Preserves local Ollama routing when local AI mode is active.
-        """
+        """Generate text routing User BYOK -> Gemini -> Groq fallback."""
         use_local = (force_provider == "ollama") or (force_provider is None and self.is_local())
 
         if use_local:
@@ -199,7 +279,18 @@ class AIOrchestrator:
                 temperature=temperature,
             )
 
-        # Cloud AI execution path: Gemini primary
+        # Check for User BYOK Provider
+        byok = await self._get_byok(user_id)
+        if byok and force_provider is None:
+            logger.info("ai_orchestrator_text_routing_to_user_byok", provider=byok.provider, model=byok.model)
+            # Strict BYOK mode: DO NOT fall back to platform providers when user has their own key active
+            return await byok.generate_text(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=temperature if temperature is not None else 0.2,
+            )
+
+        # Platform Cloud AI execution path: Gemini primary -> Groq fallback
         logger.info("ai_orchestrator_routing_to_gemini_text_primary", task="generate_text_gemini_first")
         try:
             result = await gemini_client.generate(
@@ -224,8 +315,9 @@ class AIOrchestrator:
         user_message: str,
         case_context: str = "",
         order_context: str = "",
+        user_id: Any | None = None,
     ) -> str:
-        """Multi-turn context chat generation — OpenRouter only for chatbot."""
+        """Multi-turn context chat generation — User BYOK, Local Ollama, or OpenRouter."""
         if self.is_local():
             logger.info("ai_orchestrator_chat_routing_to_local_ollama")
             return await ollama_client.generate_with_context(
@@ -236,7 +328,20 @@ class AIOrchestrator:
                 order_context=order_context,
             )
 
-        # Chatbot uses OpenRouter exclusively — no Gemini fallback for chat
+        # Check for User BYOK Provider
+        byok = await self._get_byok(user_id)
+        if byok:
+            logger.info("ai_orchestrator_chat_routing_to_user_byok", provider=byok.provider, model=byok.model)
+            # Strict BYOK mode: DO NOT fall back to platform providers when user has their own key active
+            return await byok.generate_with_context(
+                system_prompt=system_prompt,
+                conversation_history=conversation_history,
+                user_message=user_message,
+                case_context=case_context,
+                order_context=order_context,
+            )
+
+        # Platform default: Chatbot uses OpenRouter
         logger.info("ai_orchestrator_chat_routing_to_openrouter")
         try:
             ai_response = await openrouter_client.generate_with_context(
@@ -264,8 +369,9 @@ class AIOrchestrator:
         user_message: str,
         case_context: str = "",
         order_context: str = "",
+        user_id: Any | None = None,
     ) -> AsyncGenerator[str, None]:
-        """Streaming multi-turn context chat generation — OpenRouter only for chatbot."""
+        """Streaming multi-turn context chat generation — User BYOK, Local Ollama, or OpenRouter."""
         if self.is_local():
             logger.info("ai_orchestrator_chat_stream_routing_to_local_ollama")
             async for token in ollama_client.generate_with_context_stream(
@@ -278,7 +384,23 @@ class AIOrchestrator:
                 yield token
             return
 
-        # Chatbot uses OpenRouter exclusively — no Gemini fallback for streaming chat
+        # Check for User BYOK Provider
+        byok = await self._get_byok(user_id)
+        if byok:
+            logger.info("ai_orchestrator_chat_stream_routing_to_user_byok", provider=byok.provider, model=byok.model)
+            # Strict BYOK mode: DO NOT fall back to platform providers when user has their own key active
+            async for token in byok.generate_with_context_stream(
+                system_prompt=system_prompt,
+                conversation_history=conversation_history,
+                user_message=user_message,
+                case_context=case_context,
+                order_context=order_context,
+            ):
+                if token:
+                    yield token
+            return
+
+        # Platform default: Chatbot uses OpenRouter streaming
         logger.info("ai_orchestrator_chat_stream_routing_to_openrouter")
         has_tokens = False
         try:

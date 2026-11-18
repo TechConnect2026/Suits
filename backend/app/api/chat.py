@@ -83,7 +83,9 @@ async def send_message(
         raise ForbiddenError()
 
     ai_service = AIService(db)
-    response = await ai_service.chat(conversation_id, request.message, request.order_filename)
+    response = await ai_service.chat(
+        conversation_id, request.message, request.order_filename, user_id=user.id
+    )
     return APIResponse(data=response)
 
 
@@ -111,7 +113,7 @@ async def stream_message(
 
     ai_service = AIService(db)
     generator = ai_service.chat_stream(
-        conversation_id, request.message, request.order_filename
+        conversation_id, request.message, request.order_filename, user_id=user.id
     )
 
     return StreamingResponse(

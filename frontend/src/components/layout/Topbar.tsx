@@ -166,7 +166,7 @@ export default function Topbar() {
                     (e.currentTarget.style.background = "transparent")
                   }
                 >
-                  <User size={15} /> Profile
+                  <User size={15} /> Profile & Settings
                 </Link>
                 <button
                   onClick={handleLogout}

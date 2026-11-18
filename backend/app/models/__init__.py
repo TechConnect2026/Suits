@@ -17,6 +17,7 @@ from app.models.email_verification import EmailVerification
 from app.models.saved_file import SavedFile
 from app.models.user_document import UserDocument
 from app.models.document_chunk import DocumentChunk
+from app.models.user_api_key import UserApiKey, AIProviderName
 
 __all__ = [
     "User",
@@ -36,4 +37,6 @@ __all__ = [
     "SavedFile",
     "UserDocument",
     "DocumentChunk",
+    "UserApiKey",
+    "AIProviderName",
 ]
