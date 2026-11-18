@@ -102,6 +102,7 @@ class PredictionService:
         self,
         cnr: str,
         force_refresh: bool = False,
+        user_id: Any | None = None,
     ) -> CasePredictionResponse | None:
         """Generate or retrieve cached judicial outcome prediction for the given CNR."""
         if not settings.prediction_enabled:
@@ -288,6 +289,7 @@ Generate a structured JSON response matching the following structure:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=target_max_tokens,
+            user_id=user_id,
         )
         reasoning_summary = "Synthesized via Local Ollama (Qwen 7B)" if ai_orchestrator.is_local() else "Synthesized via Gemini Judicial Outcome Engine"
 

@@ -150,6 +150,7 @@ class HeadnoteService:
         cnr: str,
         filename: str | None = None,
         force_refresh: bool = False,
+        user_id: Any | None = None,
     ) -> CaseHeadnoteResponse | None:
         """Fetch cached headnote or execute full two-stage extraction pipeline."""
         cnr_clean = cnr.strip().upper()
@@ -350,6 +351,7 @@ Generate the publisher-grade headnote in JSON adhering to this structure:
         raw_json = await ai_orchestrator.generate_json_gemini_first(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
+            user_id=user_id,
         )
 
         if not raw_json or not isinstance(raw_json, dict):

@@ -21,7 +21,7 @@ async def get_order_markdown(cnr: str, filename: str, user: CurrentUser, db: DbS
 @router.get("/{cnr}/ai/{filename:path}", response_model=APIResponse[OrderAIResponse])
 async def get_order_ai(cnr: str, filename: str, user: CurrentUser, db: DbSession):
     service = OrderService(db)
-    result = await service.get_ai_analysis(cnr, filename)
+    result = await service.get_ai_analysis(cnr, filename, user_id=user.id)
     return APIResponse(data=result)
 
 

@@ -829,6 +829,7 @@ class EraTransitionService:
         concordance_pairs: list[StatuteConcordancePair],
         case_data: dict[str, Any],
         era: str,
+        user_id: Any | None = None,
     ) -> list[PrecedentTranspositionItem]:
         """Call AI orchestrator to craft court-ready transposed pleading paragraphs.
 
@@ -878,6 +879,7 @@ class EraTransitionService:
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 max_tokens=900,
+                user_id=user_id,
             )
 
             if parsed_json and "transpositions" in parsed_json and isinstance(parsed_json["transpositions"], list):
@@ -992,6 +994,7 @@ class EraTransitionService:
         self,
         cnr: str,
         force_refresh: bool = False,
+        user_id: Any | None = None,
     ) -> EraTransitionCaseAnalysis | None:
         """Fetch cached era transition analysis or execute full analysis and pleading synthesis."""
         cnr_clean = cnr.strip().upper()
@@ -1072,7 +1075,7 @@ class EraTransitionService:
 
         # 5. Gemini Precedent Transposition & Court Pleading Synthesis
         transposed_items = await self._synthesize_transpositions_with_gemini(
-            concordance_pairs, case_data, era
+            concordance_pairs, case_data, era, user_id=user_id
         )
 
         analysis = EraTransitionCaseAnalysis(

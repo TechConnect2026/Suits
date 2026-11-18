@@ -1,9 +1,8 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Sun, Moon, Cpu, Cloud, WifiOff } from "lucide-react";
+import { Cpu, Cloud, WifiOff, Settings } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/auth-store";
-import { useThemeStore } from "@/store/theme-store";
 import { useAIModeStore } from "@/store/ai-mode-store";
 
 // SVG icons matching the reference design (stroke-based, 18×18)
@@ -94,22 +93,22 @@ function ScalesIcon() {
 }
 
 const navItems = [
-  { path: "/dashboard",  label: "Workspace",  Icon: WorkspaceIcon },
-  { path: "/bookmarks",  label: "Bookmarks",  Icon: BookmarkIcon },
-  { path: "/files",      label: "Files",      Icon: FilesIcon },
-  { path: "/document",   label: "Document",   Icon: DocumentIcon },
-  { path: "/research",   label: "Research",   Icon: ResearchIcon },
-  { path: "/chat",       label: "Chatbot",    Icon: ChatbotIcon },
+  { path: "/dashboard", label: "Workspace", Icon: WorkspaceIcon },
+  { path: "/bookmarks", label: "Bookmarks", Icon: BookmarkIcon },
+  { path: "/files", label: "Files", Icon: FilesIcon },
+  { path: "/document", label: "Document", Icon: DocumentIcon },
+  { path: "/research", label: "Research", Icon: ResearchIcon },
+  { path: "/chat", label: "Chatbot", Icon: ChatbotIcon },
   { path: "/transition", label: "Transition", Icon: TransitionIcon },
-  { path: "/analytics",  label: "Analytics",  Icon: AnalyticsIcon },
-  { path: "/history",    label: "History",    Icon: HistoryIcon },
+  { path: "/analytics", label: "Analytics", Icon: AnalyticsIcon },
+  { path: "/history", label: "History", Icon: HistoryIcon },
 ];
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { theme, toggleTheme } = useThemeStore();
+  const isProfileActive = location.pathname === "/profile" || location.pathname === "/settings";
   const {
     mode,
     isOffline,
@@ -118,7 +117,6 @@ export default function Sidebar() {
     checkOllamaHealth,
   } = useAIModeStore();
 
-  const isDark = theme === "dark";
   const effectiveProvider = getEffectiveProvider();
 
   const handleToggleAIMode = (e: React.MouseEvent) => {
@@ -238,15 +236,15 @@ export default function Sidebar() {
                           effectiveProvider === "local"
                             ? "#27ae60"
                             : isOffline
-                            ? "#d48806"
-                            : "var(--ink-faint)",
+                              ? "#d48806"
+                              : "var(--ink-faint)",
                       }}
                     >
                       {isOffline
                         ? "Offline (Qwen 7B)"
                         : effectiveProvider === "local"
-                        ? "Local (Qwen 7B)"
-                        : "Cloud (Gemini)"}
+                          ? "Local (Qwen 7B)"
+                          : "Cloud (Gemini)"}
                     </span>
                   </div>
                 </div>
@@ -273,39 +271,46 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      {/* Footer: Clean Profile pill → /profile + Theme toggle */}
+      {/* Footer: Compact Profile & Settings pill */}
       <div className="sidebar-foot">
-        <div className="sidebar-foot-row">
-          {/* Clicking anywhere on the pill goes to /profile */}
-          <button
-            onClick={() => navigate("/profile")}
-            className="sidebar-profile-btn"
-            aria-label="Go to profile"
-            title={user?.full_name || "Profile"}
+        <button
+          onClick={() => navigate("/profile")}
+          className="sidebar-foot-row w-full group cursor-pointer transition-all"
+          style={{
+            background: isProfileActive ? "var(--brass-soft)" : "var(--lg-panel-bg)",
+            borderColor: isProfileActive ? "var(--brass)" : "var(--lg-border)",
+            padding: "15px 15px 15px 15px",
+            minHeight: "50px",
+          }}
+          aria-label="Profile and Settings"
+          title={`${user?.full_name || "Profile"} · Profile & Settings`}
+        >
+          <div
+            className="sidebar-avatar"
+            style={{ width: "28px", height: "28px", fontSize: "15px" }}
           >
-            <div className="sidebar-avatar">
-              {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
-            </div>
-            <div className="sidebar-user-info">
-              <span className="sidebar-user-name">{user?.full_name || "User"}</span>
-              <span className="sidebar-user-role">Advocate</span>
-            </div>
-          </button>
-
-          {/* Dark Mode Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="sidebar-theme-btn"
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            title={isDark ? "Light mode" : "Dark mode"}
-          >
-            {isDark ? (
-              <Sun size={17} key="sun" className="animate-icon-swap" />
-            ) : (
-              <Moon size={17} key="moon" className="animate-icon-swap" />
-            )}
-          </button>
-        </div>
+            {user?.full_name?.charAt(0)?.toUpperCase() || "U"}
+          </div>
+          <div className="sidebar-user-info text-left min-w-0 flex-1">
+            <span
+              className="sidebar-user-name"
+              style={{ fontSize: "13px", lineHeight: "1.25" }}
+            >
+              {user?.full_name || "User"}
+            </span>
+            <span
+              className="sidebar-user-role"
+              style={{ fontSize: "10.5px", lineHeight: "1.25" }}
+            >
+              Profile & Settings
+            </span>
+          </div>
+          <Settings
+            size={14}
+            className="shrink-0 transition-transform group-hover:rotate-45"
+            style={{ color: "var(--ink-faint)" }}
+          />
+        </button>
       </div>
     </aside>
   );

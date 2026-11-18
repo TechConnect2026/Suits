@@ -394,7 +394,7 @@ class OrderService:
         await cache_service.set(redis_key, response.model_dump())
         return response
 
-    async def get_ai_analysis(self, cnr: str, filename: str) -> OrderAIResponse:
+    async def get_ai_analysis(self, cnr: str, filename: str, user_id: Any | None = None) -> OrderAIResponse:
         """Get AI analysis of a Kanoon court order / judgment with permanent caching."""
         redis_key = f"order_ai:{cnr}:{filename}"
 
@@ -451,10 +451,15 @@ class OrderService:
             system_prompt = _ORDER_AI_LOCAL_SYSTEM_PROMPT
             target_max_tokens = 1500
         else:
-            condensed_text = order_text[:16000]
-            extraction_prompt = _ORDER_AI_EXTRACTION_PROMPT.replace("{order_text}", condensed_text)
-            system_prompt = _ORDER_AI_SYSTEM_PROMPT
-            target_max_tokens = 4096
+            if len(order_text) > 8000:
+                head_txt = order_text[:4000]
+                tail_txt = order_text[-4000:]
+                condensed_text = f"{head_txt}\n\n[... intermediate procedural proceedings omitted for concise extraction ...]\n\n{tail_txt}"
+            else:
+                condensed_text = order_text
+            extraction_prompt = _ORDER_AI_LOCAL_PROMPT.replace("{order_text}", condensed_text)
+            system_prompt = _ORDER_AI_LOCAL_SYSTEM_PROMPT
+            target_max_tokens = 2000
 
         logger.info("ORDER_AI_CALLING_LLM", cnr=cnr, filename=filename, text_length=len(condensed_text), is_local=is_local)
 
@@ -464,11 +469,13 @@ class OrderService:
                 system_prompt=system_prompt,
                 user_prompt=extraction_prompt,
                 max_tokens=target_max_tokens,
+                user_id=user_id,
             )
         except Exception as exc:
             logger.warning("order_ai_failed", error=str(exc))
 
         if isinstance(raw, dict):
+            logger.info("ORDER_AI_RAW_RECEIVED", keys=list(raw.keys()), summary_val=raw.get("executiveSummary") or raw.get("executive_summary"))
             raw = _normalize_order_ai_dict(raw)
 
         if not raw or not raw.get("executiveSummary"):
