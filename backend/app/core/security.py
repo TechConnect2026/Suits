@@ -3,6 +3,7 @@
 Handles JWT token creation/verification and password hashing using bcrypt.
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -30,8 +31,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(data: dict[str, Any]) -> str:
-    """Create a JWT access token with expiration."""
+    """Create a JWT access token with expiration and unique jti."""
     to_encode = data.copy()
+    if "jti" not in to_encode:
+        to_encode["jti"] = uuid.uuid4().hex
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.jwt_access_token_expire_minutes
     )
@@ -40,8 +43,10 @@ def create_access_token(data: dict[str, Any]) -> str:
 
 
 def create_refresh_token(data: dict[str, Any]) -> str:
-    """Create a JWT refresh token with longer expiration."""
+    """Create a JWT refresh token with longer expiration and unique jti."""
     to_encode = data.copy()
+    if "jti" not in to_encode:
+        to_encode["jti"] = uuid.uuid4().hex
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.jwt_refresh_token_expire_days
     )

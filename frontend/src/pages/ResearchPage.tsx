@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import {
   Trash2,
@@ -15,9 +15,14 @@ import { fileService } from "@/services/files";
 import type { SavedFile } from "@/types/file";
 import { SkeletonLoader } from "@/components/common/SkeletonLoader";
 import { EmptyState } from "@/components/common/EmptyState";
-import { DocumentReaderModal } from "@/components/case/DocumentReaderModal";
 import { ResearchBriefModal } from "@/components/files/ResearchBriefModal";
 import { toast } from "sonner";
+
+const DocumentReaderModal = lazy(() =>
+  import("@/components/case/DocumentReaderModal").then((m) => ({
+    default: m.DocumentReaderModal,
+  }))
+);
 
 interface ResearchPageProps {
   embedded?: boolean;
@@ -272,19 +277,21 @@ export default function ResearchPage({ embedded = false, onCountChange }: Resear
 
       {/* Document Reader Modal */}
       {readerFile && (
-        <DocumentReaderModal
-          isOpen={isReaderOpen}
-          onClose={() => {
-            setIsReaderOpen(false);
-            loadFiles();
-          }}
-          cnr={readerFile.cnr}
-          filename={readerFile.filename}
-          caseTitle={readerFile.case_title}
-          courtName={readerFile.court_name}
-          orderDate={readerFile.order_date}
-          initialMode="pdf"
-        />
+        <Suspense fallback={null}>
+          <DocumentReaderModal
+            isOpen={isReaderOpen}
+            onClose={() => {
+              setIsReaderOpen(false);
+              loadFiles();
+            }}
+            cnr={readerFile.cnr}
+            filename={readerFile.filename}
+            caseTitle={readerFile.case_title}
+            courtName={readerFile.court_name}
+            orderDate={readerFile.order_date}
+            initialMode="pdf"
+          />
+        </Suspense>
       )}
 
       {/* Research Brief Modal */}

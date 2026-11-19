@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import String, DateTime, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.types import Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,6 +14,7 @@ class Bookmark(Base):
     __tablename__ = "bookmarks"
     __table_args__ = (
         UniqueConstraint("user_id", "cnr", name="uq_user_cnr_bookmark"),
+        Index("ix_bookmarks_user_date", "user_id", "bookmarked_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

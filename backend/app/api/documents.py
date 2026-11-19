@@ -83,7 +83,7 @@ async def upload_document(
     # Validate
     processor = DocumentProcessor(db)
     try:
-        processor.validate_file(file.filename or "upload", content_type, file_size)
+        processor.validate_file(file.filename or "upload", content_type, file_size, file_data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

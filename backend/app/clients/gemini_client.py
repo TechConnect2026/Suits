@@ -29,6 +29,13 @@ class GeminiClient:
         self._configured = False
         self.client: genai.Client | None = None
         self._credits_depleted_until: float = 0.0
+        self._semaphore: asyncio.Semaphore | None = None
+
+    @property
+    def semaphore(self) -> asyncio.Semaphore:
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(15)
+        return self._semaphore
 
     def _is_credits_depleted(self) -> bool:
         return time.monotonic() < self._credits_depleted_until
@@ -94,16 +101,17 @@ class GeminiClient:
                 break
             for attempt in range(2):
                 try:
-                    coro = self.client.aio.models.generate_content(  # type: ignore[union-attr]
-                        model=model_name,
-                        contents=user_prompt,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                            temperature=temperature,
-                            max_output_tokens=max_output_tokens,
-                        ),
-                    )
-                    response = await asyncio.wait_for(coro, timeout=40.0)
+                    async with self.semaphore:
+                        coro = self.client.aio.models.generate_content(  # type: ignore[union-attr]
+                            model=model_name,
+                            contents=user_prompt,
+                            config=types.GenerateContentConfig(
+                                system_instruction=system_prompt,
+                                temperature=temperature,
+                                max_output_tokens=max_output_tokens,
+                            ),
+                        )
+                        response = await asyncio.wait_for(coro, timeout=40.0)
                     if response and response.text:
                         logger.info("gemini_success", model=model_name, attempt=attempt)
                         return response.text
@@ -406,18 +414,19 @@ class GeminiClient:
                 try:
                     combined_prompt = f"SYSTEM INSTRUCTIONS:\n{system_prompt}\n\nUSER REQUEST:\n{full_prompt}"
 
-                    response_stream = await self.client.aio.models.generate_content_stream(  # type: ignore
-                        model=model_name,
-                        contents=combined_prompt,
-                        config=types.GenerateContentConfig(
-                            temperature=temperature,
-                            max_output_tokens=4096,
-                        ),
-                    )
-                    async for chunk in response_stream:
-                        if chunk.text:
-                            yield chunk.text
-                    return
+                    async with self.semaphore:
+                        response_stream = await self.client.aio.models.generate_content_stream(  # type: ignore
+                            model=model_name,
+                            contents=combined_prompt,
+                            config=types.GenerateContentConfig(
+                                temperature=temperature,
+                                max_output_tokens=4096,
+                            ),
+                        )
+                        async for chunk in response_stream:
+                            if chunk.text:
+                                yield chunk.text
+                        return
                 except Exception as exc:
                     last_error = str(exc)
                     logger.warning("gemini_stream_model_failed", model=model_name, error=last_error)

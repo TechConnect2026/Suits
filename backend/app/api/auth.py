@@ -1,14 +1,16 @@
 """Auth router - Login, Register, Google OAuth, Email OTP, Refresh Token, Profile."""
 
 from typing import Any
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, Depends
+from fastapi.security import HTTPAuthorizationCredentials
 
-from app.dependencies.auth import CurrentUser, DbSession
+from app.dependencies.auth import CurrentUser, DbSession, optional_security_scheme
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     TokenResponse,
     RefreshTokenRequest,
+    LogoutRequest,
     VerifyOtpRequest,
     ResendOtpRequest,
     GoogleAuthRequest,
@@ -69,10 +71,25 @@ async def google_login(request: GoogleAuthRequest, db: DbSession):
 
 
 @router.post("/login", response_model=APIResponse[TokenResponse])
-async def login(request: LoginRequest, db: DbSession):
+async def login(request: LoginRequest, req: Request, db: DbSession):
+    forwarded = req.headers.get("x-forwarded-for")
+    client_ip = forwarded.split(",")[0].strip() if forwarded else (req.client.host if req.client else "unknown")
     service = AuthService(db)
-    tokens = await service.login(request.email, request.password)
+    tokens = await service.login(request.email, request.password, client_ip=client_ip)
     return APIResponse(data=tokens, message="Login successful.")
+
+
+@router.post("/logout", response_model=APIResponse)
+async def logout(
+    db: DbSession,
+    request: LogoutRequest | None = None,
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security_scheme),
+):
+    service = AuthService(db)
+    access_token = credentials.credentials if credentials else None
+    refresh_token = request.refresh_token if request else None
+    await service.logout(access_token=access_token, refresh_token=refresh_token)
+    return APIResponse(message="Successfully logged out.")
 
 
 @router.post("/refresh", response_model=APIResponse[TokenResponse])

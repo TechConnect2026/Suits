@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
     cors_origins: str = Field(default="http://localhost:5173,http://127.0.0.1:5173")
 
+    # Database Connection Pool (PostgreSQL / Cloud Postgres)
+    db_pool_size: int = Field(default=15)
+    db_max_overflow: int = Field(default=25)
+    db_pool_timeout: int = Field(default=30)
+    db_pool_recycle: int = Field(default=1800)
+
     # Rate Limiting
     rate_limit_per_minute: int = Field(default=120)
 

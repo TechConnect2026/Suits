@@ -58,4 +58,12 @@ export const authService = {
     const res = await api.post<APIResponse<null>>("/auth/change-password", data);
     return res.data;
   },
+
+  logout: async (refreshToken?: string | null) => {
+    try {
+      await api.post("/auth/logout", { refresh_token: refreshToken || undefined });
+    } catch {
+      // Silently proceed with client cleanup if backend is unreachable
+    }
+  },
 };

@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import SuitsBaseException
 from app.middleware.logging import RequestLoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.security import SecurityHeadersMiddleware
 from app.api import auth, search, cases, orders, chat, bookmarks, history, analytics, files, documents, statutes, counter_pleading, drafting, adversarial, precedents, api_keys
 from app.clients.kanoon_client import kanoon_client
 from app.services.cache_service import cache_service
@@ -100,6 +101,7 @@ cors_kwargs = {
 
 app.add_middleware(CORSMiddleware, **cors_kwargs)
 
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(AIProviderMiddleware)
@@ -151,13 +153,16 @@ async def suits_exception_handler(request: Request, exc: SuitsBaseException):
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error("unhandled_exception", error=str(exc), path=request.url.path)
+    import uuid
+    ref_id = uuid.uuid4().hex[:12]
+    logger.error("unhandled_exception", ref_id=ref_id, error=str(exc), path=request.url.path)
     return JSONResponse(
         status_code=500,
         content={
             "success": False,
-            "message": "An unexpected error occurred.",
+            "message": f"An unexpected error occurred. Ref: {ref_id}",
             "error_code": "INTERNAL_ERROR",
+            "ref_id": ref_id,
         },
     )
 
@@ -198,7 +203,64 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "version": "1.0.0"}
+    import time
+    checks = {}
+    is_healthy = True
+
+    # 1. Probe Database
+    db_start = time.monotonic()
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        checks["database"] = {
+            "status": "up",
+            "latency_ms": round((time.monotonic() - db_start) * 1000, 2),
+        }
+    except Exception as exc:
+        is_healthy = False
+        checks["database"] = {
+            "status": "down",
+            "error": str(exc)[:200],
+        }
+
+    # 2. Probe Redis
+    redis_start = time.monotonic()
+    try:
+        r = await cache_service._get_redis()
+        if r is not None:
+            await r.ping()
+            checks["redis"] = {
+                "status": "up",
+                "latency_ms": round((time.monotonic() - redis_start) * 1000, 2),
+            }
+        else:
+            checks["redis"] = {
+                "status": "degraded_in_memory",
+                "note": "Redis disconnected, fallback in-memory cache active",
+            }
+    except Exception as exc:
+        checks["redis"] = {
+            "status": "down",
+            "error": str(exc)[:200],
+        }
+
+    # 3. Gemini key configuration
+    has_key = bool(settings.gemini_api_key and settings.gemini_api_key.strip())
+    checks["ai_gemini"] = {
+        "status": "configured" if has_key else "missing_key",
+        "model": settings.gemini_model,
+    }
+
+    status_code = 200 if is_healthy else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "healthy" if is_healthy else "unhealthy",
+            "version": "1.0.0",
+            "environment": settings.environment,
+            "checks": checks,
+        },
+    )
 
 
 @app.get("/api/health/prediction")

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy import String, DateTime, ForeignKey, Index
 from sqlalchemy.types import Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,6 +12,9 @@ from app.database.base import Base
 
 class Conversation(Base):
     __tablename__ = "conversations"
+    __table_args__ = (
+        Index("ix_conversations_user_updated", "user_id", "updated_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=False), primary_key=True, default=uuid.uuid4

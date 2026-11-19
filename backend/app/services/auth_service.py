@@ -12,14 +12,28 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 
 from app.core.config import settings
-from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_refresh_token
-from app.core.exceptions import UnauthorizedError, DuplicateError, ForbiddenError, ValidationError
+from app.core.security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    create_refresh_token,
+    decode_access_token,
+    decode_refresh_token,
+)
+from app.core.exceptions import (
+    UnauthorizedError,
+    DuplicateError,
+    ForbiddenError,
+    ValidationError,
+    RateLimitError,
+)
 from app.models.user import User
 from app.models.email_verification import EmailVerification
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import TokenResponse
 from app.schemas.user import UserResponse
 from app.services.email_service import email_service
+from app.services.cache_service import cache_service
 
 logger = structlog.get_logger()
 
@@ -192,19 +206,31 @@ class AuthService:
         await self._generate_and_send_otp(clean_email, full_name=user.full_name, purpose=purpose)
         return True
 
-    async def login(self, email: str, password: str) -> TokenResponse:
-        """Authenticate user with email + password, enforcing email verification."""
+    async def login(self, email: str, password: str, client_ip: str = "unknown") -> TokenResponse:
+        """Authenticate user with email + password, enforcing brute-force lockouts."""
         clean_email = email.strip().lower()
+        lockout_key = f"{client_ip}:{clean_email}"
+
+        # 1. Check for active brute-force lockout (5 failed attempts within 15 mins)
+        failures = await cache_service.get_auth_failures(lockout_key)
+        if failures >= 5:
+            raise RateLimitError("Too many failed login attempts. Account temporarily locked for 15 minutes.")
+
         user = await self.repo.get_by_email(clean_email)
         
         if not user or not user.password_hash:
+            await cache_service.record_auth_failure(lockout_key, window_seconds=900)
             raise UnauthorizedError("Invalid email or password.")
 
         if user.password_hash.startswith("oauth:"):
             raise UnauthorizedError("This account was created with Google Sign-In. Please click 'Continue with Google'.")
 
         if not verify_password(password, user.password_hash):
+            await cache_service.record_auth_failure(lockout_key, window_seconds=900)
             raise UnauthorizedError("Invalid email or password.")
+
+        # Reset failed attempts upon successful password match
+        await cache_service.reset_auth_failures(lockout_key)
 
         if not user.is_verified:
             user.is_verified = True
@@ -214,6 +240,32 @@ class AuthService:
         refresh_token = create_refresh_token({"sub": str(user.id)})
 
         return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+    async def logout(self, access_token: str | None = None, refresh_token: str | None = None) -> None:
+        """Revoke active access and refresh tokens."""
+        if access_token:
+            payload = decode_access_token(access_token)
+            if payload and payload.get("jti"):
+                exp = payload.get("exp")
+                ttl = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 3600
+                if ttl > 0:
+                    await cache_service.revoke_token(payload["jti"], ttl_seconds=ttl)
+            else:
+                import hashlib
+                token_hash = hashlib.sha256(access_token.encode()).hexdigest()[:32]
+                await cache_service.revoke_token(token_hash, ttl_seconds=3600)
+
+        if refresh_token:
+            payload = decode_refresh_token(refresh_token)
+            if payload and payload.get("jti"):
+                exp = payload.get("exp")
+                ttl = int(exp - datetime.now(timezone.utc).timestamp()) if exp else 86400 * 7
+                if ttl > 0:
+                    await cache_service.revoke_token(payload["jti"], ttl_seconds=ttl)
+            else:
+                import hashlib
+                token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()[:32]
+                await cache_service.revoke_token(token_hash, ttl_seconds=86400 * 7)
 
     async def google_auth(self, credential_jwt: str) -> dict:
         """Authenticate or register user via Google ID Token."""
@@ -292,6 +344,11 @@ class AuthService:
         payload = decode_refresh_token(refresh_token)
         if not payload:
             raise UnauthorizedError("Invalid or expired refresh token.")
+
+        # Check if refresh token has been revoked
+        jti = payload.get("jti")
+        if jti and await cache_service.is_token_revoked(jti):
+            raise UnauthorizedError("Refresh token has been revoked.")
 
         user_id = payload.get("sub")
         if not user_id:

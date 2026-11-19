@@ -6,6 +6,7 @@ import os
 import uuid
 import hashlib
 import json
+import asyncio
 import structlog
 from pathlib import Path
 from typing import Optional
@@ -45,6 +46,15 @@ CHUNK_SIZE = 800          # characters per chunk
 CHUNK_OVERLAP = 150       # overlap between consecutive chunks
 
 
+def sanitize_filename(filename: str) -> str:
+    """Sanitize user-provided filename to prevent path traversal and arbitrary filesystem writes."""
+    base_name = Path(filename).name.replace("\x00", "")
+    safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', base_name)
+    if not safe_name or safe_name.startswith('.'):
+        safe_name = f"document_{safe_name}"
+    return safe_name[:128]
+
+
 class DocumentProcessor:
     """Handles file upload, OCR/text extraction, chunking, and embedding generation."""
 
@@ -57,8 +67,8 @@ class DocumentProcessor:
     #  File Validation & Storage                                          #
     # ------------------------------------------------------------------ #
 
-    def validate_file(self, filename: str, content_type: str, size: int) -> None:
-        """Raise ValueError if the file does not meet requirements."""
+    def validate_file(self, filename: str, content_type: str, size: int, data: bytes = b"") -> None:
+        """Raise ValueError if the file does not meet requirements or magic bytes mismatch."""
         if size > MAX_FILE_SIZE_BYTES:
             raise ValueError(f"File too large ({size // 1024 // 1024} MB). Maximum is 25 MB.")
         if content_type not in ALLOWED_MIME_TYPES:
@@ -67,13 +77,31 @@ class DocumentProcessor:
                 f"Supported: PDF, DOCX, TXT, MD, PNG, JPG, TIFF."
             )
 
+        if data:
+            if content_type == "application/pdf" and not data.startswith(b"%PDF-"):
+                raise ValueError("Corrupt or invalid PDF file header (magic byte mismatch).")
+            elif content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" and not data.startswith(b"PK\x03\x04"):
+                raise ValueError("Corrupt or invalid DOCX file header.")
+            elif content_type == "image/png" and not data.startswith(b"\x89PNG\r\n\x1a\n"):
+                raise ValueError("Corrupt or invalid PNG image header.")
+            elif content_type == "image/jpeg" and not data.startswith(b"\xFF\xD8\xFF"):
+                raise ValueError("Corrupt or invalid JPEG image header.")
+            elif content_type in ("text/plain", "text/markdown") and b"\x00" in data[:1024]:
+                raise ValueError("Binary null characters detected in plain text document.")
+
     def save_file(self, user_id: uuid.UUID, filename: str, data: bytes) -> Path:
-        """Save raw file bytes to disk under data/uploads/{user_id}/. Returns the path."""
-        user_dir = UPLOAD_DIR / str(user_id)
+        """Save raw file bytes to disk under data/uploads/{user_id}/ safely. Returns the path."""
+        user_dir = (UPLOAD_DIR / str(user_id)).resolve()
         user_dir.mkdir(parents=True, exist_ok=True)
-        # Use a unique name to avoid collisions
-        safe_name = f"{uuid.uuid4().hex}_{filename}"
-        file_path = user_dir / safe_name
+
+        safe_name = sanitize_filename(filename)
+        unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+        file_path = (user_dir / unique_name).resolve()
+
+        # Strict path containment verification against directory traversal
+        if not file_path.is_relative_to(UPLOAD_DIR.resolve()):
+            raise ValueError("Target path escapes authorized upload directory.")
+
         file_path.write_bytes(data)
         return file_path
 
@@ -93,7 +121,8 @@ class DocumentProcessor:
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword",
         ):
-            return self._extract_docx(file_data), 0
+            extracted = await asyncio.to_thread(self._extract_docx, file_data)
+            return extracted, 0
         elif mime_type in ("text/plain", "text/markdown"):
             return file_data.decode("utf-8", errors="replace"), 0
         elif mime_type in ("image/png", "image/jpeg", "image/tiff"):

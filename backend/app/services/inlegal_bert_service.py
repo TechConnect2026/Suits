@@ -169,6 +169,11 @@ class InLegalBertService:
             self._embed_cache[text_clean] = res
             return res
 
+    async def embed_text_async(self, text: str) -> list[float]:
+        """Asynchronously compute InLegalBERT embedding in worker threadpool to prevent event-loop blocking."""
+        import asyncio
+        return await asyncio.to_thread(self.embed_text, text)
+
     def compute_similarity(self, vec_a: list[float], vec_b: list[float]) -> float:
         """Compute cosine similarity between two normalized embedding vectors."""
         if not vec_a or not vec_b or len(vec_a) != len(vec_b):

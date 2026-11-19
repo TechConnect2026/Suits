@@ -1,6 +1,7 @@
 """Authentication dependency - JWT token validation for protected routes."""
 
 import uuid
+import hashlib
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -8,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
+from app.services.cache_service import cache_service
 from app.database.session import get_db
 from app.models.user import User, UserRole
 from app.repositories.user_repository import UserRepository
@@ -26,6 +28,22 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token.",
         )
+
+    # Verify token is not revoked
+    jti = payload.get("jti")
+    if jti:
+        if await cache_service.is_token_revoked(jti):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked.",
+            )
+    else:
+        token_hash = hashlib.sha256(credentials.credentials.encode()).hexdigest()[:32]
+        if await cache_service.is_token_revoked(token_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked.",
+            )
 
     user_id = payload.get("sub")
     if not user_id:

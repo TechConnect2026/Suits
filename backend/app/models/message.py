@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Text, DateTime, ForeignKey, Enum as SAEnum
+from sqlalchemy import String, Text, DateTime, ForeignKey, Enum as SAEnum, Index
 from sqlalchemy.types import Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
@@ -18,6 +18,9 @@ class MessageRole(str, enum.Enum):
 
 class Message(Base):
     __tablename__ = "messages"
+    __table_args__ = (
+        Index("ix_messages_conv_created", "conversation_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=False), primary_key=True, default=uuid.uuid4

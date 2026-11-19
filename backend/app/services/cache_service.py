@@ -135,6 +135,58 @@ class CacheService:
             except Exception as exc:
                 logger.debug("cache_delete_pattern_error", error=str(exc))
 
+    async def revoke_token(self, jti: str, ttl_seconds: int = 86400) -> None:
+        """Add a token JTI (or identifier) to the revocation blocklist."""
+        await self.set(f"token_blocklist:{jti}", "revoked", ttl_seconds=ttl_seconds)
+
+    async def is_token_revoked(self, jti: str) -> bool:
+        """Check if a token JTI is in the revocation blocklist."""
+        val = await self.get(f"token_blocklist:{jti}")
+        return val is not None
+
+    async def record_auth_failure(self, identifier: str, window_seconds: int = 900) -> int:
+        """Record a failed auth attempt and return the count within the rolling window."""
+        key = f"auth_fail:{identifier}"
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                cnt = await r.incr(key)
+                if cnt == 1:
+                    await r.expire(key, window_seconds)
+                return cnt
+            except Exception as exc:
+                logger.debug("redis_record_auth_fail_error", error=str(exc))
+
+        # In-memory fallback
+        exp, current_cnt = self._memory_cache.get(key, (None, 0))
+        now = time.time()
+        if exp is None or now >= exp:
+            new_cnt = 1
+            self._memory_cache[key] = (now + window_seconds, new_cnt)
+        else:
+            new_cnt = current_cnt + 1
+            self._memory_cache[key] = (exp, new_cnt)
+        return new_cnt
+
+    async def get_auth_failures(self, identifier: str) -> int:
+        """Get the current count of failed auth attempts."""
+        key = f"auth_fail:{identifier}"
+        r = await self._get_redis()
+        if r is not None:
+            try:
+                val = await r.get(key)
+                return int(val) if val else 0
+            except Exception:
+                pass
+        exp, current_cnt = self._memory_cache.get(key, (None, 0))
+        if exp is not None and time.time() < exp:
+            return int(current_cnt)
+        return 0
+
+    async def reset_auth_failures(self, identifier: str) -> None:
+        """Reset failed auth attempts upon successful authentication."""
+        await self.delete(f"auth_fail:{identifier}")
+
     async def close(self) -> None:
         if self._redis:
             await self._redis.aclose()

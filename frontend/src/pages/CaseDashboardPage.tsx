@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { CaseHeader } from "@/components/case/CaseHeader";
@@ -7,7 +7,6 @@ import { PartyCard } from "@/components/case/PartyCard";
 import { JudgeCard } from "@/components/case/JudgeCard";
 import { StatisticsCard } from "@/components/case/StatisticsCard";
 import { DocumentLiquidNavBar } from "@/components/case/DocumentLiquidNavBar";
-import { DocumentReaderModal } from "@/components/case/DocumentReaderModal";
 import { CitationNetworkView } from "@/components/case/citation/CitationNetworkView";
 import { CriminalEraTransitionCard } from "@/components/case/CriminalEraTransitionCard";
 import { OrderIntelligenceCard } from "@/components/case/OrderIntelligenceCard";
@@ -16,6 +15,12 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SuitsLoader } from "@/components/common/SuitsLoader";
 import { SkeletonLoader } from "@/components/common/SkeletonLoader";
 import { ErrorState } from "@/components/common/ErrorState";
+
+const DocumentReaderModal = lazy(() =>
+  import("@/components/case/DocumentReaderModal").then((m) => ({
+    default: m.DocumentReaderModal,
+  }))
+);
 
 import { caseService } from "@/services/cases";
 import { bookmarkService } from "@/services/bookmarks";
@@ -562,31 +567,33 @@ export default function CaseDashboardPage() {
 
       {/* In-Built Document Reader Modal with Research Panel & Chat */}
       {readerFilename && (
-        <DocumentReaderModal
-          key={`${readerCnr || caseData.cnr}_${readerFilename}_${readerMode}`}
-          isOpen={isReaderOpen}
-          onClose={() => {
-            setIsReaderOpen(false);
-            setReaderFilename(null);
-          }}
-          cnr={readerCnr || caseData.cnr}
-          filename={readerFilename}
-          caseTitle={readerCaseTitle || caseData.case_title}
-          courtName={readerCourtName || caseData.court?.court_name || "Court Record"}
-          orderDate={readerOrderDate || caseData.decision_date || caseData.next_hearing_date || "Court Order"}
-          initialMode={readerMode}
-          orders={readerOrders}
-          allowModeToggle={readerAllowToggle}
-          isChatOpen={isChatOpen}
-          onToggleChat={() => setIsChatOpen(!isChatOpen)}
-          chatMessages={messages}
-          onSendMessage={handleSendMessage}
-          chatLoading={chatLoading}
-          streamingContent={streamingContent}
-          suggestedQuestions={suggestedQuestions}
-          onClearChat={handleClearChat}
-          onExpandChat={handleExpandChat}
-        />
+        <Suspense fallback={null}>
+          <DocumentReaderModal
+            key={`${readerCnr || caseData.cnr}_${readerFilename}_${readerMode}`}
+            isOpen={isReaderOpen}
+            onClose={() => {
+              setIsReaderOpen(false);
+              setReaderFilename(null);
+            }}
+            cnr={readerCnr || caseData.cnr}
+            filename={readerFilename}
+            caseTitle={readerCaseTitle || caseData.case_title}
+            courtName={readerCourtName || caseData.court?.court_name || "Court Record"}
+            orderDate={readerOrderDate || caseData.decision_date || caseData.next_hearing_date || "Court Order"}
+            initialMode={readerMode}
+            orders={readerOrders}
+            allowModeToggle={readerAllowToggle}
+            isChatOpen={isChatOpen}
+            onToggleChat={() => setIsChatOpen(!isChatOpen)}
+            chatMessages={messages}
+            onSendMessage={handleSendMessage}
+            chatLoading={chatLoading}
+            streamingContent={streamingContent}
+            suggestedQuestions={suggestedQuestions}
+            onClearChat={handleClearChat}
+            onExpandChat={handleExpandChat}
+          />
+        </Suspense>
       )}
 
       {/* Floating AI Chat (rendered when reader is closed) */}

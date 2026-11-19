@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
@@ -446,137 +447,167 @@ class OrderService:
             except Exception:
                 pass
 
-        # 3. Fetch real Markdown from Kanoon API
-        order_md_response = await self.get_markdown(cnr, filename)
-        order_text = order_md_response.markdown
+        # 3. Single-flight coalescing lock to avoid duplicate LLM inferences under concurrent load
+        lock_key = f"lock:order_ai:{cnr}:{filename}"
+        r = await cache_service._get_redis()
+        has_lock = False
+        if r is not None:
+            try:
+                acquired = await r.set(lock_key, "1", nx=True, ex=45)
+                if not acquired:
+                    # Wait briefly for the in-progress analysis to finish
+                    for _ in range(12):
+                        await asyncio.sleep(1.0)
+                        cached_check = await cache_service.get(redis_key)
+                        if cached_check:
+                            return OrderAIResponse(**cached_check)
+                        cached_pg = await self.cache_repo.get_cached_ai(cnr, filename)
+                        if cached_pg and cached_pg.ai_json:
+                            try:
+                                data = json.loads(cached_pg.ai_json)
+                                return self._transform_ai_response(cnr, filename, data)
+                            except Exception:
+                                pass
+                else:
+                    has_lock = True
+            except Exception:
+                has_lock = False
 
-        if not order_text or order_text.startswith("*") or "could not be retrieved" in order_text.lower():
-            raw = {
-                "executiveSummary": "This document could not be analyzed because the Indian Kanoon content was unavailable.",
-                "outcome": "Content unavailable from Indian Kanoon.",
-                "extractionConfidence": 0.0,
-            }
-            return self._transform_ai_response(cnr, filename, raw)
-
-        # 4. Generate structured analysis via AI Orchestrator (Local Ollama or Cloud)
-        from app.services.ai_orchestrator import ai_orchestrator
-        is_local = ai_orchestrator.is_local()
-
-        if is_local:
-            # For Local Ollama (Qwen 7B): Condense judgment text to avoid quadratic attention prefill latency
-            # and context-window degradation. Head (3500 chars) + Tail (3500 chars) captures parties, facts,
-            # substantive reasoning, and operative disposition without choking local compute.
-            if len(order_text) > 7000:
-                head_txt = order_text[:3500]
-                tail_txt = order_text[-3500:]
-                condensed_text = f"{head_txt}\n\n[... intermediate procedural narration omitted for concise processing ...]\n\n{tail_txt}"
-            else:
-                condensed_text = order_text
-
-            extraction_prompt = _ORDER_AI_LOCAL_PROMPT.replace("{order_text}", condensed_text)
-            system_prompt = _ORDER_AI_LOCAL_SYSTEM_PROMPT
-            target_max_tokens = 1500
-        else:
-            if len(order_text) > 8000:
-                head_txt = order_text[:4000]
-                tail_txt = order_text[-4000:]
-                condensed_text = f"{head_txt}\n\n[... intermediate procedural proceedings omitted for concise extraction ...]\n\n{tail_txt}"
-            else:
-                condensed_text = order_text
-            extraction_prompt = _ORDER_AI_LOCAL_PROMPT.replace("{order_text}", condensed_text)
-            system_prompt = _ORDER_AI_LOCAL_SYSTEM_PROMPT
-            target_max_tokens = 2000
-
-        logger.info("ORDER_AI_CALLING_LLM", cnr=cnr, filename=filename, text_length=len(condensed_text), is_local=is_local)
-
-        raw = None
         try:
-            raw = await ai_orchestrator.generate_json_gemini_first(
-                system_prompt=system_prompt,
-                user_prompt=extraction_prompt,
-                max_tokens=target_max_tokens,
-                user_id=user_id,
-            )
-        except Exception as exc:
-            logger.warning("order_ai_failed", error=str(exc))
+            # 4. Fetch real Markdown from Kanoon API
+            order_md_response = await self.get_markdown(cnr, filename)
+            order_text = order_md_response.markdown
 
-        if isinstance(raw, dict):
-            logger.info("ORDER_AI_RAW_RECEIVED", keys=list(raw.keys()), summary_val=raw.get("executiveSummary") or raw.get("executive_summary"))
-            raw = _normalize_order_ai_dict(raw)
-
-        if not raw or not raw.get("executiveSummary"):
-            raw = {
-                "executiveSummary": "AI analysis could not be generated for this court record at this time.",
-                "outcome": "Analysis unavailable.",
-                "extractionConfidence": 0.0,
-            }
-            logger.error("ORDER_AI_ALL_MODELS_RETURNED_EMPTY", cnr=cnr, filename=filename)
-            return self._transform_ai_response(cnr, filename, raw)
-
-        logger.info(
-            "ORDER_AI_SUCCESS",
-            cnr=cnr,
-            filename=filename,
-            confidence=raw.get("extractionConfidence"),
-            summary_preview=(raw.get("executiveSummary") or "")[:150],
-        )
-
-        # 5. Store permanently in database (only for valid extractions)
-        if raw.get("extractionConfidence", 0.0) > 0.0:
-            try:
-                await self.cache_repo.save_cached_ai(CachedAIAnalysis(
-                    cnr=cnr,
-                    filename=filename,
-                    ai_json=json.dumps(raw, default=str),
-                    fetched_at=datetime.now(timezone.utc),
-                ))
-            except Exception as save_ai_err:
-                logger.warning("failed_to_save_cached_ai", cnr=cnr, error=str(save_ai_err))
-
-            # Also synthesize and cache unified publisher headnote to avoid duplicate extraction
-            try:
-                order_hash = hashlib.sha256(order_text.encode("utf-8")).hexdigest()[:16]
-                held_list = raw.get("heldPoints") or raw.get("held_points")
-                if not held_list and raw.get("ratioDecidendi"):
-                    held_list = [raw.get("ratioDecidendi")]
-                elif not held_list:
-                    held_list = []
-
-                headnote_payload = {
-                    "target_cnr": cnr,
-                    "order_id": filename,
-                    "order_title": raw.get("caseNumber") or filename,
-                    "order_date": raw.get("orderDate") or raw.get("order_date"),
-                    "court_name": raw.get("courtName") or raw.get("court_name"),
-                    "bench_coram": raw.get("judgeNames") or raw.get("judge_names", []),
-                    "headnote": {
-                        "catchwords": raw.get("catchwords", []),
-                        "held_points": held_list,
-                        "ratio_decidendi_summary": raw.get("ratioDecidendi") or raw.get("courtReasoning", ""),
-                        "obiter_dicta": raw.get("obiterDicta") or raw.get("obiter_dicta", []),
-                        "precedent_citator_table": raw.get("precedentCitatorTable") or raw.get("precedent_citator_table", []),
-                        "statutory_provisions_considered": raw.get("statutoryProvisionsConsidered") or raw.get("statutory_provisions_considered", []),
-                        "operative_disposition": raw.get("operativeDisposition") or raw.get("outcome") or raw.get("dispositionStatus") or "Disposed",
-                    },
-                    "model_attribution": "Unified Case Intelligence · InLegalBERT & Local Ollama" if ai_orchestrator.is_local() else "Unified Case Intelligence · InLegalBERT & Gemini",
-                    "order_hash": order_hash,
-                    "is_cached": True,
-                    "generated_at": datetime.now(timezone.utc).isoformat(),
+            if not order_text or order_text.startswith("*") or "could not be retrieved" in order_text.lower():
+                raw = {
+                    "executiveSummary": "This document could not be analyzed because the Indian Kanoon content was unavailable.",
+                    "outcome": "Content unavailable from Indian Kanoon.",
+                    "extractionConfidence": 0.0,
                 }
-                await self.cache_repo.save_cached_headnote(CachedHeadnote(
-                    cnr=cnr,
-                    order_hash=order_hash,
-                    headnote_json=json.dumps(headnote_payload, default=str),
-                    generated_at=datetime.now(timezone.utc),
-                ))
-                await cache_service.set(f"headnote:{cnr}:{order_hash}", headnote_payload)
-                await cache_service.set(f"headnote:{cnr}:latest", headnote_payload)
-            except Exception as headnote_err:
-                logger.warning("failed_to_save_unified_headnote", cnr=cnr, error=str(headnote_err))
+                return self._transform_ai_response(cnr, filename, raw)
 
-        response = self._transform_ai_response(cnr, filename, raw)
-        await cache_service.set(redis_key, response.model_dump())
-        return response
+            # 5. Generate structured analysis via AI Orchestrator (Local Ollama or Cloud)
+            from app.services.ai_orchestrator import ai_orchestrator
+            is_local = ai_orchestrator.is_local()
+
+            if is_local:
+                if len(order_text) > 7000:
+                    head_txt = order_text[:3500]
+                    tail_txt = order_text[-3500:]
+                    condensed_text = f"{head_txt}\n\n[... intermediate procedural narration omitted for concise processing ...]\n\n{tail_txt}"
+                else:
+                    condensed_text = order_text
+
+                extraction_prompt = _ORDER_AI_LOCAL_PROMPT.replace("{order_text}", condensed_text)
+                system_prompt = _ORDER_AI_LOCAL_SYSTEM_PROMPT
+                target_max_tokens = 1500
+            else:
+                if len(order_text) > 8000:
+                    head_txt = order_text[:4000]
+                    tail_txt = order_text[-4000:]
+                    condensed_text = f"{head_txt}\n\n[... intermediate procedural proceedings omitted for concise extraction ...]\n\n{tail_txt}"
+                else:
+                    condensed_text = order_text
+                extraction_prompt = _ORDER_AI_LOCAL_PROMPT.replace("{order_text}", condensed_text)
+                system_prompt = _ORDER_AI_LOCAL_SYSTEM_PROMPT
+                target_max_tokens = 2000
+
+            logger.info("ORDER_AI_CALLING_LLM", cnr=cnr, filename=filename, text_length=len(condensed_text), is_local=is_local)
+
+            raw = None
+            try:
+                raw = await ai_orchestrator.generate_json_gemini_first(
+                    system_prompt=system_prompt,
+                    user_prompt=extraction_prompt,
+                    max_tokens=target_max_tokens,
+                    user_id=user_id,
+                )
+            except Exception as exc:
+                logger.warning("order_ai_failed", error=str(exc))
+
+            if isinstance(raw, dict):
+                logger.info("ORDER_AI_RAW_RECEIVED", keys=list(raw.keys()), summary_val=raw.get("executiveSummary") or raw.get("executive_summary"))
+                raw = _normalize_order_ai_dict(raw)
+
+            if not raw or not raw.get("executiveSummary"):
+                raw = {
+                    "executiveSummary": "AI analysis could not be generated for this court record at this time.",
+                    "outcome": "Analysis unavailable.",
+                    "extractionConfidence": 0.0,
+                }
+                logger.error("ORDER_AI_ALL_MODELS_RETURNED_EMPTY", cnr=cnr, filename=filename)
+                return self._transform_ai_response(cnr, filename, raw)
+
+            logger.info(
+                "ORDER_AI_SUCCESS",
+                cnr=cnr,
+                filename=filename,
+                confidence=raw.get("extractionConfidence"),
+                summary_preview=(raw.get("executiveSummary") or "")[:150],
+            )
+
+            # Store permanently in database (only for valid extractions)
+            if raw.get("extractionConfidence", 0.0) > 0.0:
+                try:
+                    await self.cache_repo.save_cached_ai(CachedAIAnalysis(
+                        cnr=cnr,
+                        filename=filename,
+                        ai_json=json.dumps(raw, default=str),
+                        fetched_at=datetime.now(timezone.utc),
+                    ))
+                except Exception as save_ai_err:
+                    logger.warning("failed_to_save_cached_ai", cnr=cnr, error=str(save_ai_err))
+
+                # Also synthesize and cache unified publisher headnote to avoid duplicate extraction
+                try:
+                    order_hash = hashlib.sha256(order_text.encode("utf-8")).hexdigest()[:16]
+                    held_list = raw.get("heldPoints") or raw.get("held_points")
+                    if not held_list and raw.get("ratioDecidendi"):
+                        held_list = [raw.get("ratioDecidendi")]
+                    elif not held_list:
+                        held_list = []
+
+                    headnote_payload = {
+                        "target_cnr": cnr,
+                        "order_id": filename,
+                        "order_title": raw.get("caseNumber") or filename,
+                        "order_date": raw.get("orderDate") or raw.get("order_date"),
+                        "court_name": raw.get("courtName") or raw.get("court_name"),
+                        "bench_coram": raw.get("judgeNames") or raw.get("judge_names", []),
+                        "headnote": {
+                            "catchwords": raw.get("catchwords", []),
+                            "held_points": held_list,
+                            "ratio_decidendi_summary": raw.get("ratioDecidendi") or raw.get("courtReasoning", ""),
+                            "obiter_dicta": raw.get("obiterDicta") or raw.get("obiter_dicta", []),
+                            "precedent_citator_table": raw.get("precedentCitatorTable") or raw.get("precedent_citator_table", []),
+                            "statutory_provisions_considered": raw.get("statutoryProvisionsConsidered") or raw.get("statutory_provisions_considered", []),
+                            "operative_disposition": raw.get("operativeDisposition") or raw.get("outcome") or raw.get("dispositionStatus") or "Disposed",
+                        },
+                        "model_attribution": "Unified Case Intelligence · InLegalBERT & Local Ollama" if ai_orchestrator.is_local() else "Unified Case Intelligence · InLegalBERT & Gemini",
+                        "order_hash": order_hash,
+                        "is_cached": True,
+                        "generated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    await self.cache_repo.save_cached_headnote(CachedHeadnote(
+                        cnr=cnr,
+                        order_hash=order_hash,
+                        headnote_json=json.dumps(headnote_payload, default=str),
+                        generated_at=datetime.now(timezone.utc),
+                    ))
+                    await cache_service.set(f"headnote:{cnr}:{order_hash}", headnote_payload)
+                    await cache_service.set(f"headnote:{cnr}:latest", headnote_payload)
+                except Exception as headnote_err:
+                    logger.warning("failed_to_save_unified_headnote", cnr=cnr, error=str(headnote_err))
+
+            response = self._transform_ai_response(cnr, filename, raw)
+            await cache_service.set(redis_key, response.model_dump())
+            return response
+        finally:
+            if has_lock and r is not None:
+                try:
+                    await r.delete(lock_key)
+                except Exception:
+                    pass
 
     async def download_pdf(self, cnr: str, filename: str) -> bytes:
         """Download original court copy from Kanoon (origdoc endpoint) or synthesize from judgment text, with permanent disk caching."""

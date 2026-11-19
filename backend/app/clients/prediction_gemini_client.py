@@ -30,6 +30,13 @@ class PredictionGeminiClient:
     def __init__(self) -> None:
         self._configured = False
         self.client: genai.Client | None = None
+        self._semaphore: asyncio.Semaphore | None = None
+
+    @property
+    def semaphore(self) -> asyncio.Semaphore:
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(15)
+        return self._semaphore
 
     def _ensure_configured(self) -> bool:
         if not self._configured:
@@ -94,13 +101,14 @@ class PredictionGeminiClient:
             for attempt in range(2):
                 try:
                     config = self._build_config(model_name, system_prompt)
-                    coro = self.client.aio.models.generate_content(  # type: ignore[union-attr]
-                        model=model_name,
-                        contents=user_prompt,
-                        config=config,
-                    )
-                    # Enforce a 40s timeout for comprehensive judicial reasoning
-                    response = await asyncio.wait_for(coro, timeout=40.0)
+                    async with self.semaphore:
+                        coro = self.client.aio.models.generate_content(  # type: ignore[union-attr]
+                            model=model_name,
+                            contents=user_prompt,
+                            config=config,
+                        )
+                        # Enforce a 40s timeout for comprehensive judicial reasoning
+                        response = await asyncio.wait_for(coro, timeout=40.0)
 
                     if not response or not response.text:
                         logger.warning("empty_prediction_response", model=model_name, attempt=attempt)

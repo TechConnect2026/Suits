@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy import String, DateTime, ForeignKey, Index
 from sqlalchemy.types import Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,6 +12,9 @@ from app.database.base import Base
 
 class SearchHistory(Base):
     __tablename__ = "search_history"
+    __table_args__ = (
+        Index("ix_search_history_user_date", "user_id", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=False), primary_key=True, default=uuid.uuid4

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import {
   Upload,
   FileText,
@@ -24,10 +24,20 @@ import {
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { documentService } from "@/services/document";
-import { DocumentReaderModal } from "@/components/case/DocumentReaderModal";
-import { AdversarialDefenseSuiteModal } from "@/components/defense/AdversarialDefenseSuiteModal";
 import type { UserDocument, DocumentTag, DocumentFilters, DocumentStats } from "@/types/document";
 import { DOCUMENT_TAG_LABELS, DOCUMENT_STATUS_LABELS } from "@/types/document";
+
+const DocumentReaderModal = lazy(() =>
+  import("@/components/case/DocumentReaderModal").then((m) => ({
+    default: m.DocumentReaderModal,
+  }))
+);
+
+const AdversarialDefenseSuiteModal = lazy(() =>
+  import("@/components/defense/AdversarialDefenseSuiteModal").then((m) => ({
+    default: m.AdversarialDefenseSuiteModal,
+  }))
+);
 
 // ─────────────────────────────────────────────────────────────── Helpers ──
 function formatBytes(bytes: number): string {
@@ -645,27 +655,31 @@ export default function FilesPage({ embedded = false, onCountChange }: FilesPage
       )}
 
       {selectedDoc && (
-        <DocumentReaderModal
-          isOpen={!!selectedDoc}
-          onClose={() => {
-            setSelectedDoc(null);
-            loadData();
-          }}
-          userDoc={selectedDoc}
-          userDocumentId={selectedDoc.id}
-          initialMode={readerInitialMode}
-        />
+        <Suspense fallback={null}>
+          <DocumentReaderModal
+            isOpen={!!selectedDoc}
+            onClose={() => {
+              setSelectedDoc(null);
+              loadData();
+            }}
+            userDoc={selectedDoc}
+            userDocumentId={selectedDoc.id}
+            initialMode={readerInitialMode}
+          />
+        </Suspense>
       )}
 
       {/* Unified Adversarial Defense Suite Modal */}
       {defenseDocId && (
-        <AdversarialDefenseSuiteModal
-          isOpen={!!defenseDocId}
-          preselectedDocId={defenseDocId}
-          initialTab="written_statement"
-          onClose={() => setDefenseDocId(null)}
-          onOpenInEditor={handleOpenDefenseDraftInEditor}
-        />
+        <Suspense fallback={null}>
+          <AdversarialDefenseSuiteModal
+            isOpen={!!defenseDocId}
+            preselectedDocId={defenseDocId}
+            initialTab="written_statement"
+            onClose={() => setDefenseDocId(null)}
+            onOpenInEditor={handleOpenDefenseDraftInEditor}
+          />
+        </Suspense>
       )}
     </div>
   );
