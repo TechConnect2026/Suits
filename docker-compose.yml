@@ -69,8 +69,6 @@ services:
       JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
 
       # External APIs
-      ECOURTS_API_KEY: ${ECOURTS_API_KEY:-}
-      ECOURTS_BASE_URL: ${ECOURTS_BASE_URL:-https://api.ecourts.gov.in/partner}
       KANOON_API_TOKEN: ${KANOON_API_TOKEN:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
@@ -78,8 +76,6 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-openrouter/free}
       OPENROUTER_MAX_TOKENS: ${OPENROUTER_MAX_TOKENS:-2048}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
 
       # Host Ollama Connectivity (for local Qwen 2.5 7B offline AI)
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}

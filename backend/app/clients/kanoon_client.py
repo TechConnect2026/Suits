@@ -54,6 +54,7 @@ class KanoonClient:
                 base_url=self.BASE_URL,
                 headers=headers,
                 timeout=httpx.Timeout(15.0),
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
             )
         return self._client
 

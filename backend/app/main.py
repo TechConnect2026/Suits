@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI):
     # Cleanup
     await kanoon_client.close()
     await cache_service.close()
+    await engine.dispose()
     logger.info("suits_stopped")
 
 

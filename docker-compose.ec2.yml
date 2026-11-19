@@ -28,7 +28,7 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379/0
-      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-4}
     depends_on:
       redis:
         condition: service_healthy
